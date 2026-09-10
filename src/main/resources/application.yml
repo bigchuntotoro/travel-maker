@@ -1,0 +1,23 @@
+server:
+  port: 8084
+
+spring:
+  datasource:
+    driver-class-name: org.mariadb.jdbc.Driver
+    url: jdbc:mariadb://100.88.187.37:3306/reactdb?useSSL=false&characterEncoding=UTF-8&serverTimezone=UTC
+    username: totoro
+    password: totoro # 본인의 MariaDB 비밀번호로 수정하세요
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.example.travel.dto
+  configuration:
+    map-underscore-to-camel-case: true
+    jdbc-type-for-null: NULL
+
+logging:
+  level:
+    com.example.travel.mapper: DEBUG # SQL 쿼리 로그 확인용
+
+kakao:
+  rest-api-key: f5797aa27145b4c698e9a298090a5cbf
