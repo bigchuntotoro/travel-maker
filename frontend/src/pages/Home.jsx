@@ -1,5 +1,3 @@
-// src/pages/Home.jsx
-
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPlan } from "../api/travelApi";
@@ -42,6 +40,7 @@ const Home = () => {
   // 실제 도로 경로 관련 상태
   // =========================================================
   const [routePath, setRoutePath] = useState([]);
+  const [routeSegments, setRouteSegments] = useState([]);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
 
   // =========================================================
@@ -163,6 +162,7 @@ const Home = () => {
     // 장소가 2개 미만이면 경로를 만들 수 없음
     if (!placeItems || placeItems.length < 2) {
       setRoutePath([]);
+      setRouteSegments([]);
       return;
     }
 
@@ -217,6 +217,7 @@ const Home = () => {
         console.error("잘못된 좌표:", invalidPoint);
 
         setRoutePath([]);
+        setRouteSegments([]);
         alert("장소 좌표가 올바르지 않아 경로를 계산할 수 없습니다.");
         return;
       }
@@ -288,12 +289,41 @@ const Home = () => {
         console.warn("카카오모빌리티 경로가 없습니다:", data);
 
         setRoutePath([]);
+        setRouteSegments([]);
 
         alert("도로 경로를 찾을 수 없습니다.");
         return;
       }
 
       const route = data.routes[0];
+
+      // -------------------------------------------------------
+      // 구간별 이동 시간 / 거리
+      //
+      // Kakao Mobility 응답의 sections는
+      // 장소 1 → 장소 2
+      // 장소 2 → 장소 3
+      // ...
+      // 순서로 구성됩니다.
+      // -------------------------------------------------------
+      const segments = [];
+
+      if (Array.isArray(route.sections)) {
+        route.sections.forEach((section, index) => {
+          const from = placeItems[index];
+          const to = placeItems[index + 1];
+
+          segments.push({
+            index: index + 1,
+            from: from?.placeName || `장소 ${index + 1}`,
+            to: to?.placeName || `장소 ${index + 2}`,
+            duration: Number(section.duration || 0),
+            distance: Number(section.distance || 0),
+          });
+        });
+      }
+
+      setRouteSegments(segments);
 
       // -------------------------------------------------------
       // sections → roads → vertexes
@@ -352,6 +382,7 @@ const Home = () => {
         );
 
         setRoutePath([]);
+        setRouteSegments([]);
 
         alert("도로 경로 좌표를 가져오지 못했습니다.");
       }
@@ -359,6 +390,7 @@ const Home = () => {
       console.error("🚨 실제 도로 경로 조회 실패:", error);
 
       setRoutePath([]);
+      setRouteSegments([]);
 
       alert(`실제 도로 경로를 가져오지 못했습니다.\n\n${error.message}`);
     } finally {
@@ -437,6 +469,7 @@ const Home = () => {
       setSearchKeyword("");
       setSelectedPlaceForMap(null);
       setRoutePath([]);
+      setRouteSegments([]);
 
       // 일정 목록으로 이동
       navigate("/plans");
@@ -448,6 +481,46 @@ const Home = () => {
       setIsSubmitting(false);
     }
   };
+
+  // =========================================================
+  // 이동 시간 / 거리 표시용 포맷
+  // =========================================================
+  const formatDuration = (seconds) => {
+    const totalMinutes = Math.round(Number(seconds || 0) / 60);
+
+    if (totalMinutes < 60) {
+      return `${totalMinutes}분`;
+    }
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (minutes === 0) {
+      return `${hours}시간`;
+    }
+
+    return `${hours}시간 ${minutes}분`;
+  };
+
+  const formatDistance = (meters) => {
+    const distance = Number(meters || 0);
+
+    if (distance < 1000) {
+      return `${Math.round(distance)}m`;
+    }
+
+    return `${(distance / 1000).toFixed(1)}km`;
+  };
+
+  const totalRouteDuration = routeSegments.reduce(
+    (total, segment) => total + Number(segment.duration || 0),
+    0,
+  );
+
+  const totalRouteDistance = routeSegments.reduce(
+    (total, segment) => total + Number(segment.distance || 0),
+    0,
+  );
 
   // =========================================================
   // 화면
@@ -656,6 +729,141 @@ const Home = () => {
           }}
         >
           🚗 실제 도로 경로가 표시되었습니다.
+        </div>
+      )}
+
+      {/* =====================================================
+          구간별 이동 시간
+      ====================================================== */}
+      {!isRouteLoading && routeSegments.length > 0 && (
+        <div
+          style={{
+            marginBottom: "12px",
+            padding: "14px 16px",
+            backgroundColor: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: "10px",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "12px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "14px",
+                fontWeight: "bold",
+                color: "#111827",
+              }}
+            >
+              🚗 구간별 이동시간
+            </div>
+
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: "600",
+                color: "#2563eb",
+              }}
+            >
+              총 {formatDuration(totalRouteDuration)}
+              {" · "}
+              {formatDistance(totalRouteDistance)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            {routeSegments.map((segment) => (
+              <div
+                key={segment.index}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "9px 10px",
+                  backgroundColor: "#f9fafb",
+                  borderRadius: "7px",
+                  fontSize: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    minWidth: "26px",
+                    height: "26px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    backgroundColor: "#2563eb",
+                    color: "#ffffff",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {segment.index}
+                </div>
+
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: "600",
+                      color: "#374151",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {segment.from}
+                    <span
+                      style={{
+                        margin: "0 6px",
+                        color: "#9ca3af",
+                      }}
+                    >
+                      →
+                    </span>
+                    {segment.to}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "3px",
+                      color: "#9ca3af",
+                      fontSize: "11px",
+                    }}
+                  >
+                    {formatDistance(segment.distance)}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    minWidth: "70px",
+                    textAlign: "right",
+                    fontWeight: "bold",
+                    color: "#111827",
+                  }}
+                >
+                  {formatDuration(segment.duration)}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
