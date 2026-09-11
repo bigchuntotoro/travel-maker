@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPlan } from "../api/travelApi";
 import KakaoMap from "../components/map/KakaoMap";
@@ -21,6 +21,8 @@ const Home = () => {
 
   // =========================================================
   // 여행 장소 목록
+  //
+  // stayMinutes : 장소 체류시간
   // =========================================================
   const [items, setItems] = useState([]);
 
@@ -30,18 +32,23 @@ const Home = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // =========================================================
-  // 장소 검색 관련 상태
+  // 장소 검색
   // =========================================================
   const [searchKeyword, setSearchKeyword] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [selectedPlaceForMap, setSelectedPlaceForMap] = useState(null);
 
   // =========================================================
-  // 실제 도로 경로 관련 상태
+  // 실제 도로 경로
   // =========================================================
   const [routePath, setRoutePath] = useState([]);
   const [routeSegments, setRouteSegments] = useState([]);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
+
+  // =========================================================
+  // 여행 시작 시간
+  // =========================================================
+  const [dayStartTime] = useState("09:00");
 
   // =========================================================
   // 로그아웃
@@ -59,8 +66,6 @@ const Home = () => {
 
     setStartDate(newStartDate);
 
-    // 종료 날짜가 시작 날짜보다 빠르면
-    // 종료 날짜를 시작 날짜와 동일하게 변경
     if (endDate && newStartDate > endDate) {
       setEndDate(newStartDate);
     }
@@ -77,9 +82,30 @@ const Home = () => {
       longitude: Number(placeInfo.longitude),
       visitOrder: items.length + 1,
       memo: "",
+
+      // ⭐ 기본 체류시간 60분
+      stayMinutes: 60,
     };
 
     setItems((prev) => [...prev, newItem]);
+  };
+
+  // =========================================================
+  // 체류시간 변경
+  // =========================================================
+  const handleStayMinutesChange = (index, value) => {
+    const minutes = Math.max(0, Number(value) || 0);
+
+    setItems((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              stayMinutes: minutes,
+            }
+          : item,
+      ),
+    );
   };
 
   // =========================================================
@@ -125,41 +151,25 @@ const Home = () => {
       return;
     }
 
-    // 지도 이동용 좌표
     setSelectedPlaceForMap({
       lat,
       lng,
     });
 
-    // 여행 장소 목록에 추가
     handlePlaceSelect({
       placeName: place.place_name,
       latitude: lat,
       longitude: lng,
     });
 
-    // 검색창 초기화
     setSearchKeyword("");
     setSearchResults([]);
   };
 
   // =========================================================
-  // 카카오모빌리티 실제 도로 경로 조회
-  //
-  // items
-  //   1번 = 출발지
-  //   마지막 = 목적지
-  //   중간 = 경유지
-  //
-  // Spring Boot
-  // POST /api/plans/route
-  //
-  // Spring Boot에서 Kakao Mobility
-  // POST /v1/waypoints/directions
-  // 호출
+  // 실제 도로 경로 조회
   // =========================================================
   const loadRoadRoute = async (placeItems) => {
-    // 장소가 2개 미만이면 경로를 만들 수 없음
     if (!placeItems || placeItems.length < 2) {
       setRoutePath([]);
       setRouteSegments([]);
@@ -169,9 +179,6 @@ const Home = () => {
     try {
       setIsRouteLoading(true);
 
-      // -------------------------------------------------------
-      // 출발지
-      // -------------------------------------------------------
       const originItem = placeItems[0];
 
       const origin = {
@@ -180,9 +187,6 @@ const Home = () => {
         y: Number(originItem.latitude),
       };
 
-      // -------------------------------------------------------
-      // 목적지
-      // -------------------------------------------------------
       const destinationItem = placeItems[placeItems.length - 1];
 
       const destination = {
@@ -191,18 +195,12 @@ const Home = () => {
         y: Number(destinationItem.latitude),
       };
 
-      // -------------------------------------------------------
-      // 경유지
-      // -------------------------------------------------------
       const waypoints = placeItems.slice(1, -1).map((item) => ({
         name: item.placeName,
         x: Number(item.longitude),
         y: Number(item.latitude),
       }));
 
-      // -------------------------------------------------------
-      // 좌표 유효성 검사
-      // -------------------------------------------------------
       const allPoints = [origin, ...waypoints, destination];
 
       const invalidPoint = allPoints.find(
@@ -218,32 +216,23 @@ const Home = () => {
 
         setRoutePath([]);
         setRouteSegments([]);
+
         alert("장소 좌표가 올바르지 않아 경로를 계산할 수 없습니다.");
         return;
       }
 
-      // -------------------------------------------------------
-      // Spring Boot /api/plans/route 요청
-      // -------------------------------------------------------
       const requestBody = {
         origin,
         destination,
         waypoints,
 
-        // 추천 경로
         priority: "RECOMMEND",
 
-        // 차량 정보
         car_fuel: "GASOLINE",
         car_hipass: false,
 
-        // 대안 경로
         alternatives: false,
-
-        // 상세 도로 정보
         road_details: false,
-
-        // 요약 정보
         summary: false,
       };
 
@@ -277,9 +266,6 @@ const Home = () => {
 
       console.log("🚗 카카오모빌리티 경로 응답:", data);
 
-      // -------------------------------------------------------
-      // routes 확인
-      // -------------------------------------------------------
       if (
         !data ||
         !data.routes ||
@@ -297,15 +283,9 @@ const Home = () => {
 
       const route = data.routes[0];
 
-      // -------------------------------------------------------
-      // 구간별 이동 시간 / 거리
-      //
-      // Kakao Mobility 응답의 sections는
-      // 장소 1 → 장소 2
-      // 장소 2 → 장소 3
-      // ...
-      // 순서로 구성됩니다.
-      // -------------------------------------------------------
+      // =====================================================
+      // 구간별 이동시간 / 거리
+      // =====================================================
       const segments = [];
 
       if (Array.isArray(route.sections)) {
@@ -325,19 +305,9 @@ const Home = () => {
 
       setRouteSegments(segments);
 
-      // -------------------------------------------------------
-      // sections → roads → vertexes
-      //
-      // vertexes 형식:
-      //
-      // [
-      //   longitude,
-      //   latitude,
-      //   longitude,
-      //   latitude,
-      //   ...
-      // ]
-      // -------------------------------------------------------
+      // =====================================================
+      // 도로 좌표
+      // =====================================================
       const path = [];
 
       if (Array.isArray(route.sections)) {
@@ -368,9 +338,6 @@ const Home = () => {
         });
       }
 
-      // -------------------------------------------------------
-      // 경로 좌표가 정상적으로 생성된 경우
-      // -------------------------------------------------------
       if (path.length > 0) {
         console.log(`🚗 실제 도로 경로 좌표 ${path.length}개 생성`);
 
@@ -399,91 +366,58 @@ const Home = () => {
   };
 
   // =========================================================
-  // 장소 목록 변경 시 실제 도로 경로 자동 조회
+  // 장소 목록 변경 → 실제 도로 경로 자동 조회
   // =========================================================
   useEffect(() => {
     loadRoadRoute(items);
   }, [items]);
 
   // =========================================================
-  // 일정 저장
+  // 시간 "09:30" → 분
   // =========================================================
-  const handleSubmitPlan = async () => {
-    // 여행 제목 확인
-    if (!title.trim()) {
-      alert("여행 제목을 입력해 주세요.");
-      return;
-    }
+  const timeToMinutes = (time) => {
+    const [hour, minute] = time.split(":").map(Number);
 
-    // 여행 기간 확인
-    if (!startDate || !endDate) {
-      alert("여행 기간을 설정해 주세요.");
-      return;
-    }
-
-    // 장소 확인
-    if (items.length === 0) {
-      alert("최소 하나 이상의 장소를 지도에 추가해 주세요.");
-      return;
-    }
-
-    // 날짜 최종 검증
-    if (startDate > endDate) {
-      alert("종료 날짜는 시작 날짜보다 이전일 수 없습니다.");
-      return;
-    }
-
-    // 로그인 사용자 확인
-    if (!user.userId) {
-      alert("로그인 정보가 없습니다. 다시 로그인해 주세요.");
-      navigate("/login");
-      return;
-    }
-
-    // -------------------------------------------------------
-    // 서버 전송 데이터
-    // -------------------------------------------------------
-    const payload = {
-      userId: user.userId,
-      title,
-      startDate,
-      endDate,
-      items,
-    };
-
-    console.log("📋 여행 일정 저장 요청:", payload);
-
-    try {
-      setIsSubmitting(true);
-
-      const res = await createPlan(payload);
-
-      alert(`성공적으로 저장되었습니다! (Plan ID: ${res.planId})`);
-
-      // 입력값 초기화
-      setTitle("");
-      setStartDate("");
-      setEndDate("");
-      setItems([]);
-      setSearchResults([]);
-      setSearchKeyword("");
-      setSelectedPlaceForMap(null);
-      setRoutePath([]);
-      setRouteSegments([]);
-
-      // 일정 목록으로 이동
-      navigate("/plans");
-    } catch (error) {
-      console.error("일정 저장 실패:", error);
-
-      alert("일정 저장 중 오류가 발생했습니다.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    return hour * 60 + minute;
   };
 
   // =========================================================
-  // 이동 시간 / 거리 표시용 포맷
+  // 분 → "09:30"
+  // =========================================================
+  const minutesToTime = (minutes) => {
+    const normalized = minutes % (24 * 60);
+
+    const hour = Math.floor(normalized / 60);
+    const minute = normalized % 60;
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+      2,
+      "0",
+    )}`;
+  };
+
+  // =========================================================
+  // 체류시간 표시
+  // =========================================================
+  const formatStayDuration = (minutes) => {
+    const value = Number(minutes || 0);
+
+    if (value < 60) {
+      return `${value}분`;
+    }
+
+    const hours = Math.floor(value / 60);
+    const remain = value % 60;
+
+    if (remain === 0) {
+      return `${hours}시간`;
+    }
+
+    return `${hours}시간 ${remain}분`;
+  };
+
+  // =========================================================
+  // 이동시간 표시
   // =========================================================
   const formatDuration = (seconds) => {
     const totalMinutes = Math.round(Number(seconds || 0) / 60);
@@ -502,6 +436,9 @@ const Home = () => {
     return `${hours}시간 ${minutes}분`;
   };
 
+  // =========================================================
+  // 거리 표시
+  // =========================================================
   const formatDistance = (meters) => {
     const distance = Number(meters || 0);
 
@@ -512,15 +449,197 @@ const Home = () => {
     return `${(distance / 1000).toFixed(1)}km`;
   };
 
+  // =========================================================
+  // 전체 이동시간
+  // =========================================================
   const totalRouteDuration = routeSegments.reduce(
     (total, segment) => total + Number(segment.duration || 0),
     0,
   );
 
+  // =========================================================
+  // 전체 이동거리
+  // =========================================================
   const totalRouteDistance = routeSegments.reduce(
     (total, segment) => total + Number(segment.distance || 0),
     0,
   );
+
+  // =========================================================
+  // 전체 체류시간
+  // =========================================================
+  const totalStayMinutes = items.reduce(
+    (total, item) => total + Number(item.stayMinutes || 60),
+    0,
+  );
+
+  // =========================================================
+  // 자동 일정표 계산
+  //
+  // 장소 1
+  // 09:00 도착
+  // 09:00 ~ 10:00 체류
+  // 10:00 출발
+  //
+  // 이동 18분
+  //
+  // 장소 2
+  // 10:18 도착
+  // 10:18 ~ 11:18 체류
+  // 11:18 출발
+  // =========================================================
+  const scheduleItems = useMemo(() => {
+    if (!items.length) {
+      return [];
+    }
+
+    let currentMinutes = timeToMinutes(dayStartTime);
+
+    return items.map((item, index) => {
+      // 이전 장소에서 현재 장소까지 이동
+      const segment = routeSegments[index - 1];
+
+      const travelMinutes = segment
+        ? Math.max(0, Math.round(Number(segment.duration || 0) / 60))
+        : 0;
+
+      // 첫 장소는 09:00 도착
+      // 이후 장소는 이전 장소 출발 + 이동시간
+      if (index > 0) {
+        currentMinutes += travelMinutes;
+      }
+
+      const arrivalMinutes = currentMinutes;
+
+      const stayMinutes = Math.max(0, Number(item.stayMinutes || 60));
+
+      const departureMinutes = arrivalMinutes + stayMinutes;
+
+      const nextSegment = routeSegments[index];
+
+      const nextTravelMinutes = nextSegment
+        ? Math.max(0, Math.round(Number(nextSegment.duration || 0) / 60))
+        : 0;
+
+      const nextArrivalMinutes = departureMinutes + nextTravelMinutes;
+
+      currentMinutes = departureMinutes;
+
+      return {
+        ...item,
+
+        scheduleIndex: index + 1,
+
+        arrivalTime: minutesToTime(arrivalMinutes),
+
+        departureTime: minutesToTime(departureMinutes),
+
+        stayMinutes,
+
+        travelFromPreviousMinutes: travelMinutes,
+
+        nextTravelMinutes,
+
+        nextDistance: nextSegment ? Number(nextSegment.distance || 0) : 0,
+
+        nextArrivalTime:
+          index < items.length - 1 ? minutesToTime(nextArrivalMinutes) : null,
+      };
+    });
+  }, [items, routeSegments, dayStartTime]);
+
+  // =========================================================
+  // 날짜별 일정 그룹
+  // =========================================================
+  const scheduleByDay = useMemo(() => {
+    const grouped = {};
+
+    scheduleItems.forEach((item) => {
+      const day = Number(item.dayNumber || 1);
+
+      if (!grouped[day]) {
+        grouped[day] = [];
+      }
+
+      grouped[day].push(item);
+    });
+
+    return grouped;
+  }, [scheduleItems]);
+
+  // =========================================================
+  // 일정 저장
+  // =========================================================
+  const handleSubmitPlan = async () => {
+    if (!title.trim()) {
+      alert("여행 제목을 입력해 주세요.");
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      alert("여행 기간을 설정해 주세요.");
+      return;
+    }
+
+    if (items.length === 0) {
+      alert("최소 하나 이상의 장소를 지도에 추가해 주세요.");
+      return;
+    }
+
+    if (startDate > endDate) {
+      alert("종료 날짜는 시작 날짜보다 이전일 수 없습니다.");
+      return;
+    }
+
+    if (!user.userId) {
+      alert("로그인 정보가 없습니다. 다시 로그인해 주세요.");
+      navigate("/login");
+      return;
+    }
+
+    // stayMinutes가 반드시 포함되도록 저장
+    const normalizedItems = items.map((item, index) => ({
+      ...item,
+      visitOrder: index + 1,
+      stayMinutes: Number(item.stayMinutes || 60),
+    }));
+
+    const payload = {
+      userId: user.userId,
+      title,
+      startDate,
+      endDate,
+      items: normalizedItems,
+    };
+
+    console.log("📋 여행 일정 저장 요청:", payload);
+
+    try {
+      setIsSubmitting(true);
+
+      const res = await createPlan(payload);
+
+      alert(`성공적으로 저장되었습니다! (Plan ID: ${res.planId})`);
+
+      setTitle("");
+      setStartDate("");
+      setEndDate("");
+      setItems([]);
+      setSearchResults([]);
+      setSearchKeyword("");
+      setSelectedPlaceForMap(null);
+      setRoutePath([]);
+      setRouteSegments([]);
+
+      navigate("/plans");
+    } catch (error) {
+      console.error("일정 저장 실패:", error);
+
+      alert("일정 저장 중 오류가 발생했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // =========================================================
   // 화면
@@ -562,7 +681,6 @@ const Home = () => {
             gap: "12px",
           }}
         >
-          {/* 내 일정 목록 */}
           <button
             onClick={() => navigate("/plans")}
             style={{
@@ -579,7 +697,6 @@ const Home = () => {
             📋 내 일정 목록
           </button>
 
-          {/* 사용자 */}
           <span
             style={{
               fontSize: "14px",
@@ -590,7 +707,6 @@ const Home = () => {
             👤 {user.nickname || "여행가"}님
           </span>
 
-          {/* 로그아웃 */}
           <button
             onClick={handleLogout}
             style={{
@@ -622,7 +738,6 @@ const Home = () => {
           border: "1px solid #e5e7eb",
         }}
       >
-        {/* 여행 제목 */}
         <input
           type="text"
           placeholder="여행 제목 (예: 제주도 2박 3일 힐링 여행)"
@@ -637,7 +752,6 @@ const Home = () => {
           }}
         />
 
-        {/* 시작 날짜 */}
         <input
           type="date"
           value={startDate}
@@ -651,15 +765,8 @@ const Home = () => {
           }}
         />
 
-        <span
-          style={{
-            color: "#6b7280",
-          }}
-        >
-          ~
-        </span>
+        <span style={{ color: "#6b7280" }}>~</span>
 
-        {/* 종료 날짜 */}
         <input
           type="date"
           value={endDate}
@@ -677,7 +784,6 @@ const Home = () => {
           }}
         />
 
-        {/* 일정 저장 */}
         <button
           onClick={handleSubmitPlan}
           disabled={isSubmitting}
@@ -696,7 +802,7 @@ const Home = () => {
       </div>
 
       {/* =====================================================
-          실제 도로 경로 계산 상태
+          실제 도로 경로 상태
       ====================================================== */}
       {isRouteLoading && items.length >= 2 && (
         <div
@@ -733,7 +839,137 @@ const Home = () => {
       )}
 
       {/* =====================================================
-          구간별 이동 시간
+          이동 / 체류시간 요약
+      ====================================================== */}
+      {items.length > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "10px",
+            marginBottom: "12px",
+          }}
+        >
+          <div
+            style={{
+              padding: "14px",
+              backgroundColor: "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: "10px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "11px",
+                color: "#6b7280",
+              }}
+            >
+              📍 방문 장소
+            </div>
+
+            <div
+              style={{
+                marginTop: "4px",
+                fontSize: "20px",
+                fontWeight: "bold",
+                color: "#111827",
+              }}
+            >
+              {items.length}곳
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "14px",
+              backgroundColor: "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: "10px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "11px",
+                color: "#6b7280",
+              }}
+            >
+              🚗 총 이동시간
+            </div>
+
+            <div
+              style={{
+                marginTop: "4px",
+                fontSize: "20px",
+                fontWeight: "bold",
+                color: "#2563eb",
+              }}
+            >
+              {formatDuration(totalRouteDuration)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "14px",
+              backgroundColor: "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: "10px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "11px",
+                color: "#6b7280",
+              }}
+            >
+              ⏱ 총 체류시간
+            </div>
+
+            <div
+              style={{
+                marginTop: "4px",
+                fontSize: "20px",
+                fontWeight: "bold",
+                color: "#059669",
+              }}
+            >
+              {formatStayDuration(totalStayMinutes)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "14px",
+              backgroundColor: "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: "10px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "11px",
+                color: "#6b7280",
+              }}
+            >
+              🛣 총 이동거리
+            </div>
+
+            <div
+              style={{
+                marginTop: "4px",
+                fontSize: "20px",
+                fontWeight: "bold",
+                color: "#7c3aed",
+              }}
+            >
+              {formatDistance(totalRouteDistance)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================
+          구간별 이동시간
       ====================================================== */}
       {!isRouteLoading && routeSegments.length > 0 && (
         <div
@@ -829,6 +1065,7 @@ const Home = () => {
                     }}
                   >
                     {segment.from}
+
                     <span
                       style={{
                         margin: "0 6px",
@@ -837,6 +1074,7 @@ const Home = () => {
                     >
                       →
                     </span>
+
                     {segment.to}
                   </div>
 
@@ -868,6 +1106,312 @@ const Home = () => {
       )}
 
       {/* =====================================================
+          ⭐ 자동 여행 일정표
+      ====================================================== */}
+      {scheduleItems.length > 0 && (
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "18px",
+            backgroundColor: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: "12px",
+            boxShadow: "0 3px 10px rgba(0,0,0,0.06)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "16px",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: "17px",
+                  fontWeight: "bold",
+                  color: "#111827",
+                }}
+              >
+                🗓️ 자동 여행 일정표
+              </div>
+
+              <div
+                style={{
+                  marginTop: "4px",
+                  fontSize: "12px",
+                  color: "#6b7280",
+                }}
+              >
+                실제 도로 이동시간 + 장소별 체류시간을 기준으로 계산됩니다.
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "7px 12px",
+                backgroundColor: "#eff6ff",
+                borderRadius: "20px",
+                color: "#2563eb",
+                fontSize: "12px",
+                fontWeight: "bold",
+              }}
+            >
+              🕘 시작 {dayStartTime}
+            </div>
+          </div>
+
+          {Object.entries(scheduleByDay).map(([dayNumber, dayItems]) => (
+            <div
+              key={dayNumber}
+              style={{
+                marginBottom: "20px",
+              }}
+            >
+              <div
+                style={{
+                  padding: "10px 12px",
+                  marginBottom: "10px",
+                  backgroundColor: "#f3f4f6",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  color: "#374151",
+                }}
+              >
+                📅 Day {dayNumber}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0",
+                }}
+              >
+                {dayItems.map((item, index) => {
+                  const globalIndex = scheduleItems.findIndex(
+                    (scheduleItem) => scheduleItem === item,
+                  );
+
+                  const isLast = index === dayItems.length - 1;
+
+                  return (
+                    <React.Fragment key={`${dayNumber}-${item.visitOrder}`}>
+                      {/* 장소 */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "70px 36px 1fr 100px",
+                          gap: "10px",
+                          alignItems: "center",
+                          padding: "12px",
+                          backgroundColor: "#f9fafb",
+                          borderRadius: "10px",
+                          border: "1px solid #f3f4f6",
+                        }}
+                      >
+                        {/* 시간 */}
+                        <div
+                          style={{
+                            textAlign: "center",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "17px",
+                              fontWeight: "bold",
+                              color: "#2563eb",
+                            }}
+                          >
+                            {item.arrivalTime}
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              color: "#9ca3af",
+                            }}
+                          >
+                            도착
+                          </div>
+                        </div>
+
+                        {/* 번호 */}
+                        <div
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "50%",
+                            backgroundColor: "#2563eb",
+                            color: "#ffffff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: "bold",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {item.visitOrder}
+                        </div>
+
+                        {/* 장소 */}
+                        <div
+                          style={{
+                            minWidth: 0,
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "bold",
+                              color: "#111827",
+                            }}
+                          >
+                            {item.placeName}
+                          </div>
+
+                          <div
+                            style={{
+                              marginTop: "5px",
+                              fontSize: "11px",
+                              color: "#6b7280",
+                            }}
+                          >
+                            체류
+                            <span
+                              style={{
+                                marginLeft: "5px",
+                                fontWeight: "bold",
+                                color: "#059669",
+                              }}
+                            >
+                              {formatStayDuration(item.stayMinutes)}
+                            </span>
+                            <span
+                              style={{
+                                margin: "0 8px",
+                                color: "#d1d5db",
+                              }}
+                            >
+                              |
+                            </span>
+                            출발
+                            <span
+                              style={{
+                                marginLeft: "5px",
+                                fontWeight: "bold",
+                                color: "#111827",
+                              }}
+                            >
+                              {item.departureTime}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 체류시간 입력 */}
+                        <div>
+                          <label
+                            style={{
+                              display: "block",
+                              marginBottom: "4px",
+                              fontSize: "10px",
+                              color: "#6b7280",
+                            }}
+                          >
+                            체류시간
+                          </label>
+
+                          <select
+                            value={item.stayMinutes ?? 60}
+                            onChange={(e) =>
+                              handleStayMinutesChange(
+                                globalIndex,
+                                e.target.value,
+                              )
+                            }
+                            style={{
+                              width: "100%",
+                              padding: "6px 4px",
+                              border: "1px solid #d1d5db",
+                              borderRadius: "6px",
+                              fontSize: "11px",
+                              backgroundColor: "#ffffff",
+                            }}
+                          >
+                            <option value="30">30분</option>
+                            <option value="60">1시간</option>
+                            <option value="90">1시간 30분</option>
+                            <option value="120">2시간</option>
+                            <option value="150">2시간 30분</option>
+                            <option value="180">3시간</option>
+                            <option value="240">4시간</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* 다음 장소까지 이동 */}
+                      {!isLast && item.nextTravelMinutes > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            padding: "8px 0 8px 84px",
+                            gap: "10px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "2px",
+                              height: "32px",
+                              backgroundColor: "#93c5fd",
+                            }}
+                          />
+
+                          <div
+                            style={{
+                              padding: "7px 10px",
+                              backgroundColor: "#eff6ff",
+                              borderRadius: "7px",
+                              fontSize: "11px",
+                              color: "#2563eb",
+                            }}
+                          >
+                            🚗 <strong>{item.nextTravelMinutes}분</strong>
+                            {" · "}
+                            {item.nextDistance > 0
+                              ? formatDistance(item.nextDistance)
+                              : ""}
+                            <span
+                              style={{
+                                marginLeft: "8px",
+                                color: "#6b7280",
+                              }}
+                            >
+                              →
+                            </span>
+                            <strong
+                              style={{
+                                marginLeft: "5px",
+                              }}
+                            >
+                              {scheduleItems[globalIndex + 1]?.arrivalTime} 도착
+                            </strong>
+                          </div>
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* =====================================================
           지도 + 검색 + 경로 플래너
       ====================================================== */}
       <div
@@ -879,7 +1423,7 @@ const Home = () => {
         }}
       >
         {/* ===================================================
-            지도 영역
+            지도
         ==================================================== */}
         <div
           style={{
@@ -887,9 +1431,7 @@ const Home = () => {
             height: "100%",
           }}
         >
-          {/* =================================================
-              검색창
-          ================================================== */}
+          {/* 검색창 */}
           <div
             style={{
               position: "absolute",
@@ -903,7 +1445,6 @@ const Home = () => {
               boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
             }}
           >
-            {/* 검색 Form */}
             <form
               onSubmit={handleSearch}
               style={{
@@ -943,9 +1484,7 @@ const Home = () => {
               </button>
             </form>
 
-            {/* =================================================
-                검색 결과
-            ================================================== */}
+            {/* 검색 결과 */}
             {searchResults.length > 0 && (
               <ul
                 style={{
@@ -1010,12 +1549,6 @@ const Home = () => {
             )}
           </div>
 
-          {/* =================================================
-              카카오 지도
-              
-              routePath를 KakaoMap으로 전달
-              → KakaoMap.jsx에서 Polyline으로 표시
-          ================================================== */}
           <KakaoMap
             items={items}
             onPlaceSelect={handlePlaceSelect}
