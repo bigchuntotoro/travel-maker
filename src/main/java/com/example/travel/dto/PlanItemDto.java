@@ -32,6 +32,11 @@ public class PlanItemDto {
     private String placeName;
 
     /**
+     * 도로명/지번 주소 🔥 [추가]
+     */
+    private String address;
+
+    /**
      * 위도
      */
     private BigDecimal latitude;
@@ -53,12 +58,6 @@ public class PlanItemDto {
 
     /**
      * 장소 체류시간 (분)
-     *
-     * 예)
-     * 30  = 30분
-     * 60  = 1시간
-     * 90  = 1시간 30분
-     * 120 = 2시간
      */
     private Integer stayMinutes;
 }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-                "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.example.travel.mapper.TravelMapper">
 
@@ -30,9 +30,7 @@
 
 
     <!-- =========================================================
-         2. 일자별 상세 경로 일괄 저장
-         
-         stay_minutes 추가
+         2. 일자별 상세 경로 일괄 저장 (address 추가)
          ========================================================= -->
     <insert id="insertPlanItems">
 
@@ -40,6 +38,7 @@
         plan_id,
         day_number,
         place_name,
+        address,        <!-- 🔥 [추가] -->
         latitude,
         longitude,
         visit_order,
@@ -56,6 +55,7 @@
             #{item.planId},
             #{item.dayNumber},
             #{item.placeName},
+            #{item.address},  <!-- 🔥 [추가] -->
             #{item.latitude},
             #{item.longitude},
             #{item.visitOrder},
@@ -89,9 +89,7 @@
 
 
     <!-- =========================================================
-         4. 일자별 상세 경로 조회
-         
-         stay_minutes → stayMinutes
+         4. 일자별 상세 경로 조회 (address 매핑 추가)
          ========================================================= -->
     <select id="selectPlanItemsByPlanId"
             resultType="com.example.travel.dto.PlanItemDto">
@@ -101,6 +99,7 @@
         plan_id AS planId,
         day_number AS dayNumber,
         place_name AS placeName,
+        address AS address,   <!-- 🔥 [추가] -->
         latitude,
         longitude,
         visit_order AS visitOrder,

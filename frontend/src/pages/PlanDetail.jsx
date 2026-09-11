@@ -1,3 +1,6 @@
+// ============================================================
+// PlanDetail.jsx 전체 수정 코드
+// ============================================================
 import React, {
   useCallback,
   useEffect,
@@ -10,15 +13,11 @@ import {
   ArrowLeft,
   CalendarDays,
   Car,
-  Check,
   Clock3,
   GripVertical,
   MapPin,
-  Navigation,
   Pencil,
   Save,
-  Search,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -45,9 +44,6 @@ import KakaoMap from "../components/map/KakaoMap";
 const DEFAULT_START_TIME = "09:00";
 const STAY_OPTIONS = [30, 60, 90, 120, 150, 180, 240];
 
-// ============================================================
-// Styles (라인 수 감소를 위한 스타일 객체 분리)
-// ============================================================
 const S = {
   flexRow: { display: "flex", alignItems: "center" },
   flexBetween: {
@@ -66,9 +62,6 @@ const S = {
   card: { border: "1px solid #e5e7eb", borderRadius: 12, background: "#fff" },
 };
 
-// ============================================================
-// Utils
-// ============================================================
 const createUiId = () =>
   `ui-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -130,18 +123,6 @@ const formatDistance = (m) => {
   return d < 1000 ? `${Math.round(d)}m` : `${(d / 1000).toFixed(1)}km`;
 };
 
-const calcStraightDistance = (lat1, lng1, lat2, lng2) => {
-  const R = 6371,
-    dLat = ((lat2 - lat1) * Math.PI) / 180,
-    dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
 const timeToMins = (t) => {
   if (!t) return 0;
   const [h, m] = String(t).split(":").map(Number);
@@ -151,9 +132,6 @@ const timeToMins = (t) => {
 const minsToTime = (m) =>
   `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
-// ============================================================
-// SortablePlanItem
-// ============================================================
 const SortablePlanItem = ({
   item,
   index,
@@ -340,9 +318,6 @@ const SortablePlanItem = ({
   );
 };
 
-// ============================================================
-// DayDropContainer
-// ============================================================
 const DayDropContainer = ({
   dayNumber,
   children,
@@ -396,9 +371,6 @@ const DayDropContainer = ({
   );
 };
 
-// ============================================================
-// Main Component
-// ============================================================
 const PlanDetail = () => {
   const { planId } = useParams();
   const navigate = useNavigate();
@@ -413,25 +385,14 @@ const PlanDetail = () => {
   const [editItems, setEditItems] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [searchKeyword, setSearchKeyword] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [selectedSearchPlace, setSelectedSearchPlace] = useState(null);
-  const [selectedPlaceForMap, setSelectedPlaceForMap] = useState(null);
-
   const [routePathsByDay, setRoutePathsByDay] = useState({});
   const [routeSections, setRouteSections] = useState([]);
-  const [routeLoading, setRouteLoading] = useState(false);
+  const [, setRouteLoading] = useState(false);
   const routeRequestIdRef = useRef(0);
 
   const [selectedDayForMap, setSelectedDayForMap] = useState(1);
+  const [selectedPlaceForMap, setSelectedPlaceForMap] = useState(null);
   const [activeDragId, setActiveDragId] = useState(null);
-  const [currentLocation, setCurrentLocation] = useState(null);
-  const [isLocating, setIsLocating] = useState(false);
-  const [startFromCurrentLocation, setStartFromCurrentLocation] =
-    useState(false);
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [optimizationResult, setOptimizationResult] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -467,133 +428,93 @@ const PlanDetail = () => {
     return path;
   };
 
-  const loadRoadRoutesByDay = useCallback(
-    async (items, locationOverride = undefined) => {
-      const requestId = ++routeRequestIdRef.current;
-      const grouped = groupItemsByDay(items);
-      setRouteLoading(true);
+  const loadRoadRoutesByDay = useCallback(async (items) => {
+    const requestId = ++routeRequestIdRef.current;
+    const grouped = groupItemsByDay(items);
+    setRouteLoading(true);
 
-      try {
-        const dayNumbers = Object.keys(grouped)
-          .map(Number)
-          .sort((a, b) => a - b);
-        const newSections = [],
-          newPaths = {};
+    try {
+      const dayNumbers = Object.keys(grouped)
+        .map(Number)
+        .sort((a, b) => a - b);
+      const newSections = [],
+        newPaths = {};
 
-        for (const dayNumber of dayNumbers) {
-          if (requestId !== routeRequestIdRef.current) return;
-          const dayItems = grouped[dayNumber] || [];
-          const useCurrentLocation =
-            dayNumber === Number(selectedDayForMap) &&
-            (locationOverride || currentLocation) &&
-            startFromCurrentLocation;
-          const activeLoc = locationOverride || currentLocation;
+      for (const dayNumber of dayNumbers) {
+        if (requestId !== routeRequestIdRef.current) return;
+        const dayItems = grouped[dayNumber] || [];
 
-          if (
-            dayItems.length === 0 ||
-            (dayItems.length === 1 && !useCurrentLocation)
-          ) {
-            newPaths[dayNumber] = [];
-            continue;
-          }
-
-          const origin =
-            useCurrentLocation && activeLoc
-              ? {
-                  name: "현재 위치",
-                  x: Number(activeLoc.lng),
-                  y: Number(activeLoc.lat),
-                }
-              : {
-                  name: dayItems[0].placeName,
-                  x: Number(dayItems[0].longitude),
-                  y: Number(dayItems[0].latitude),
-                };
-          const destination = {
-            name: dayItems[dayItems.length - 1].placeName,
-            x: Number(dayItems[dayItems.length - 1].longitude),
-            y: Number(dayItems[dayItems.length - 1].latitude),
-          };
-          const waypoints = (
-            useCurrentLocation && activeLoc ? dayItems : dayItems.slice(1, -1)
-          ).map((i) => ({
-            name: i.placeName,
-            x: Number(i.longitude),
-            y: Number(i.latitude),
-          }));
-
-          const res = await axiosInstance.post("/api/plans/route", {
-            origin,
-            destination,
-            waypoints,
-            priority: "RECOMMEND",
-            car_fuel: "GASOLINE",
-            car_hipass: false,
-            alternatives: false,
-            road_details: false,
-            summary: false,
-          });
-          const route = res?.data?.routes?.[0];
-          if (!route) {
-            newPaths[dayNumber] = [];
-            continue;
-          }
-
-          const sections = route.sections || [];
-          newPaths[dayNumber] = extractRoutePath(sections);
-
-          let sectionOffset = 0;
-          if (useCurrentLocation && activeLoc && sections[0]) {
-            newSections.push({
-              dayNumber,
-              fromUiId: "__CURRENT_LOCATION__",
-              toUiId: dayItems[0]._uiId,
-              from: {
-                _uiId: "__CURRENT_LOCATION__",
-                placeName: "현재 위치",
-                latitude: Number(activeLoc.lat),
-                longitude: Number(activeLoc.lng),
-              },
-              to: dayItems[0],
-              duration: Number(sections[0].duration || 0),
-              distance: Number(sections[0].distance || 0),
-              isCurrentLocation: true,
-            });
-            sectionOffset = 1;
-          }
-
-          sections.forEach((sec, idx) => {
-            const fIdx = idx - sectionOffset,
-              tIdx = fIdx + 1;
-            const fItem = dayItems[fIdx],
-              tItem = dayItems[tIdx];
-            if (!fItem || !tItem) return;
-            newSections.push({
-              dayNumber,
-              fromUiId: fItem._uiId,
-              toUiId: tItem._uiId,
-              from: fItem,
-              to: tItem,
-              duration: Number(sec.duration || 0),
-              distance: Number(sec.distance || 0),
-              isCurrentLocation: false,
-            });
-          });
+        if (dayItems.length <= 1) {
+          newPaths[dayNumber] = [];
+          continue;
         }
 
-        if (requestId !== routeRequestIdRef.current) return;
-        setRouteSections(newSections);
-        setRoutePathsByDay(newPaths);
-      } catch (err) {
-        if (requestId !== routeRequestIdRef.current) return;
-        setRouteSections([]);
-        setRoutePathsByDay({});
-      } finally {
-        if (requestId === routeRequestIdRef.current) setRouteLoading(false);
+        const origin = {
+          name: dayItems[0].placeName,
+          x: Number(dayItems[0].longitude),
+          y: Number(dayItems[0].latitude),
+        };
+        const destination = {
+          name: dayItems[dayItems.length - 1].placeName,
+          x: Number(dayItems[dayItems.length - 1].longitude),
+          y: Number(dayItems[dayItems.length - 1].latitude),
+        };
+        const waypoints = dayItems.slice(1, -1).map((i) => ({
+          name: i.placeName,
+          x: Number(i.longitude),
+          y: Number(i.latitude),
+        }));
+
+        const res = await axiosInstance.post("/api/plans/route", {
+          origin,
+          destination,
+          waypoints,
+          priority: "RECOMMEND",
+          car_fuel: "GASOLINE",
+          car_hipass: false,
+          alternatives: false,
+          road_details: false,
+          summary: false,
+        });
+        const route = res?.data?.routes?.[0];
+        if (!route) {
+          newPaths[dayNumber] = [];
+          continue;
+        }
+
+        const sections = route.sections || [];
+        newPaths[dayNumber] = extractRoutePath(sections);
+
+        sections.forEach((sec, idx) => {
+          const fIdx = idx,
+            tIdx = fIdx + 1;
+          const fItem = dayItems[fIdx],
+            tItem = dayItems[tIdx];
+          if (!fItem || !tItem) return;
+          newSections.push({
+            dayNumber,
+            fromUiId: fItem._uiId,
+            toUiId: tItem._uiId,
+            from: fItem,
+            to: tItem,
+            duration: Number(sec.duration || 0),
+            distance: Number(sec.distance || 0),
+            isCurrentLocation: false,
+          });
+        });
       }
-    },
-    [currentLocation, selectedDayForMap, startFromCurrentLocation],
-  );
+
+      if (requestId !== routeRequestIdRef.current) return;
+      setRouteSections(newSections);
+      setRoutePathsByDay(newPaths);
+    } catch {
+      if (requestId !== routeRequestIdRef.current) return;
+      setRouteSections([]);
+      setRoutePathsByDay({});
+    } finally {
+      if (requestId === routeRequestIdRef.current) setRouteLoading(false);
+    }
+  }, []);
 
   const fetchPlanDetail = useCallback(async () => {
     if (!planId) return;
@@ -604,7 +525,7 @@ const PlanDetail = () => {
       setPlan(res.data);
       initEditState(res.data);
       await loadRoadRoutesByDay(normalizeItems(res.data?.items || []));
-    } catch (err) {
+    } catch {
       setError("여행 일정을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -663,75 +584,54 @@ const PlanDetail = () => {
       setSelectedPlaceForMap({ lat: first.latitude, lng: first.longitude });
   };
 
-  const handleSearch = () => {
-    const keyword = searchKeyword.trim();
-    if (!keyword) return alert("검색어를 입력해주세요.");
-    if (!window.kakao?.maps?.services)
-      return alert("카카오 지도 SDK 로딩중입니다.");
+  const handlePlaceSelectFromMap = useCallback(
+    (place) => {
+      // 편집 모드가 아니거나 명시적인 추가 액션(검색 결과 추가 등)이 아닌 경우 일정에 추가하지 않음
+      if (!isEditing) {
+        if (place?.latitude && place?.longitude) {
+          setSelectedPlaceForMap({
+            lat: Number(place.latitude),
+            lng: Number(place.longitude),
+            placeName: place.placeName,
+          });
+        }
+        return;
+      }
 
-    setIsSearching(true);
-    setSelectedSearchPlace(null);
-    new window.kakao.maps.services.Places().keywordSearch(
-      keyword,
-      (data, status) => {
-        setIsSearching(false);
-        setSearchResults(
-          status === window.kakao.maps.services.Status.OK ? data || [] : [],
-        );
-        if (status !== window.kakao.maps.services.Status.OK)
-          alert("검색 결과가 없습니다.");
-      },
-    );
-  };
+      // 지도 빈 곳 클릭(map-click)은 단순 포커스 및 위치 이동용으로만 쓰고 일정에 자동 추가되지 않도록 차단
+      if (place?.source === "map-click") {
+        const lat = Number(place.latitude);
+        const lng = Number(place.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          setSelectedPlaceForMap({ lat, lng, placeName: place.placeName });
+        }
+        return;
+      }
 
-  const handleAddSelectedSearchPlace = () => {
-    if (!selectedSearchPlace) return;
-    if (!isEditing)
-      return alert("장소를 추가하려면 먼저 [편집] 버튼을 눌러주세요.");
+      const lat = Number(place.latitude);
+      const lng = Number(place.longitude);
+      const targetDay = Number(selectedDayForMap || 1);
 
-    const lat = Number(selectedSearchPlace.y),
-      lng = Number(selectedSearchPlace.x),
-      targetDay = Number(selectedDayForMap || 1);
-    if (
-      editItems.some(
-        (i) =>
-          Math.abs(i.latitude - lat) < 1e-6 &&
-          Math.abs(i.longitude - lng) < 1e-6,
-      )
-    ) {
-      return alert("이미 일정에 추가된 장소입니다.");
-    }
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-    const newItem = {
-      _uiId: createUiId(),
-      placeName: selectedSearchPlace.place_name,
-      address:
-        selectedSearchPlace.road_address_name ||
-        selectedSearchPlace.address_name ||
-        "",
-      latitude: lat,
-      longitude: lng,
-      dayNumber: targetDay,
-      visitOrder: 1,
-      stayMinutes: 60,
-    };
+      const newItem = {
+        _uiId: createUiId(),
+        placeName: place.placeName || "선택된 장소",
+        address: place.address || "",
+        latitude: lat,
+        longitude: lng,
+        dayNumber: targetDay,
+        visitOrder:
+          editItems.filter((i) => Number(i.dayNumber || 1) === targetDay)
+            .length + 1,
+        stayMinutes: 60,
+      };
 
-    setEditItems((prev) =>
-      normalizeVisitOrders([
-        ...prev,
-        {
-          ...newItem,
-          visitOrder:
-            prev.filter((i) => Number(i.dayNumber || 1) === targetDay).length +
-            1,
-        },
-      ]),
-    );
-    setSelectedPlaceForMap({ lat, lng });
-    setSelectedSearchPlace(null);
-    setSearchResults([]);
-    setSearchKeyword("");
-  };
+      setEditItems((prev) => normalizeVisitOrders([...prev, newItem]));
+      setSelectedPlaceForMap({ lat, lng, placeName: newItem.placeName });
+    },
+    [isEditing, selectedDayForMap, editItems],
+  );
 
   const handleDragEnd = (e) => {
     const { active, over } = e;
@@ -778,22 +678,8 @@ const PlanDetail = () => {
     dayNumbers.forEach((dNum) => {
       const dayItems = itemsByDay[dNum] || [];
       let curMins = timeToMins(DEFAULT_START_TIME);
-      result[dNum] = dayItems.map((item, idx) => {
+      result[dNum] = dayItems.map((item) => {
         let arrMins = curMins;
-        if (
-          startFromCurrentLocation &&
-          dNum === Number(selectedDayForMap) &&
-          idx === 0
-        ) {
-          const curRoute = routeSections.find(
-            (s) =>
-              Number(s.dayNumber) === dNum &&
-              s.isCurrentLocation &&
-              s.toUiId === item._uiId,
-          );
-          if (curRoute)
-            arrMins += Math.round(Number(curRoute.duration || 0) / 60);
-        }
         const depMins = arrMins + Number(item.stayMinutes || 60);
         const section = routeSections.find(
           (s) => Number(s.dayNumber) === dNum && s.fromUiId === item._uiId,
@@ -810,13 +696,7 @@ const PlanDetail = () => {
       });
     });
     return result;
-  }, [
-    dayNumbers,
-    itemsByDay,
-    routeSections,
-    startFromCurrentLocation,
-    selectedDayForMap,
-  ]);
+  }, [dayNumbers, itemsByDay, routeSections]);
 
   if (loading)
     return (
@@ -908,12 +788,19 @@ const PlanDetail = () => {
                   <input
                     type="date"
                     value={editStartDate}
-                    onChange={(e) => setEditStartDate(e.target.value)}
+                    onChange={(e) => {
+                      const newStart = e.target.value;
+                      setEditStartDate(newStart);
+                      if (editEndDate && newStart > editEndDate) {
+                        setEditEndDate(newStart);
+                      }
+                    }}
                   />
                   <span>~</span>
                   <input
                     type="date"
                     value={editEndDate}
+                    min={editStartDate}
                     onChange={(e) => setEditEndDate(e.target.value)}
                   />
                 </>
@@ -1010,142 +897,6 @@ const PlanDetail = () => {
         </div>
       </div>
 
-      {/* Search Bar */}
-      {isEditing && (
-        <div style={{ position: "relative", marginBottom: 15 }}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: 1, position: "relative" }}>
-              <Search
-                size={17}
-                style={{
-                  position: "absolute",
-                  left: 12,
-                  top: 12,
-                  color: "#9ca3af",
-                }}
-              />
-              <input
-                value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="장소를 검색하세요"
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  padding: "10px 12px 10px 36px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: 8,
-                  outline: "none",
-                }}
-              />
-            </div>
-            <button
-              onClick={handleSearch}
-              disabled={isSearching}
-              style={{
-                padding: "0 18px",
-                border: "none",
-                borderRadius: 8,
-                background: "#2563eb",
-                color: "#fff",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              {isSearching ? "검색 중..." : "검색"}
-            </button>
-          </div>
-          {searchResults.length > 0 && !selectedSearchPlace && (
-            <div
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                top: "calc(100% + 5px)",
-                zIndex: 100,
-                background: "#fff",
-                border: "1px solid #e5e7eb",
-                borderRadius: 10,
-                boxShadow: "0 10px 25px rgba(0,0,0,0.12)",
-              }}
-            >
-              {searchResults.slice(0, 10).map((p) => (
-                <button
-                  key={p.id || `${p.x}-${p.y}`}
-                  onClick={() => {
-                    setSelectedSearchPlace(p);
-                    setSelectedPlaceForMap({
-                      lat: Number(p.y),
-                      lng: Number(p.x),
-                    });
-                  }}
-                  style={{
-                    width: "100%",
-                    border: "none",
-                    borderBottom: "1px solid #f3f4f6",
-                    background: "#fff",
-                    padding: "11px 12px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                  }}
-                >
-                  <div
-                    style={{ fontWeight: 700, color: "#111827", fontSize: 13 }}
-                  >
-                    {p.place_name}
-                  </div>
-                  <div style={{ color: "#6b7280", fontSize: 11, marginTop: 3 }}>
-                    {p.road_address_name || p.address_name}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-          {selectedSearchPlace && (
-            <div
-              style={{
-                marginTop: 8,
-                border: "1px solid #bfdbfe",
-                borderRadius: 12,
-                background: "#f8fbff",
-                padding: 14,
-              }}
-            >
-              <div style={{ ...S.flexBetween }}>
-                <div>
-                  <strong>{selectedSearchPlace.place_name}</strong>
-                </div>
-                <button
-                  onClick={() => setSelectedSearchPlace(null)}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                  }}
-                >
-                  <X size={15} />
-                </button>
-              </div>
-              <button
-                onClick={handleAddSelectedSearchPlace}
-                style={{
-                  marginTop: 10,
-                  padding: "8px 12px",
-                  border: "none",
-                  borderRadius: 6,
-                  background: "#2563eb",
-                  color: "#fff",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                일정에 추가
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Main Layout */}
       <DndContext
         sensors={sensors}
@@ -1207,12 +958,7 @@ const PlanDetail = () => {
             <KakaoMap
               items={selectedDayItems}
               selectedPlaceForMap={selectedPlaceForMap}
-              onPlaceSelect={(p) =>
-                setSelectedPlaceForMap({
-                  lat: Number(p.latitude),
-                  lng: Number(p.longitude),
-                })
-              }
+              onPlaceSelect={handlePlaceSelectFromMap}
               routePath={selectedRoutePath}
             />
           </div>
