@@ -1,5 +1,5 @@
 // ============================================================
-// PlanDetail.jsx 전체 수정 코드
+// PlanDetail.jsx 전체 수정 코드 (불필요한 코드 정리)
 // ============================================================
 import React, {
   useCallback,
@@ -387,7 +387,6 @@ const PlanDetail = () => {
 
   const [routePathsByDay, setRoutePathsByDay] = useState({});
   const [routeSections, setRouteSections] = useState([]);
-  const [, setRouteLoading] = useState(false);
   const routeRequestIdRef = useRef(0);
 
   const [selectedDayForMap, setSelectedDayForMap] = useState(1);
@@ -431,7 +430,6 @@ const PlanDetail = () => {
   const loadRoadRoutesByDay = useCallback(async (items) => {
     const requestId = ++routeRequestIdRef.current;
     const grouped = groupItemsByDay(items);
-    setRouteLoading(true);
 
     try {
       const dayNumbers = Object.keys(grouped)
@@ -511,8 +509,6 @@ const PlanDetail = () => {
       if (requestId !== routeRequestIdRef.current) return;
       setRouteSections([]);
       setRoutePathsByDay({});
-    } finally {
-      if (requestId === routeRequestIdRef.current) setRouteLoading(false);
     }
   }, []);
 
@@ -586,7 +582,6 @@ const PlanDetail = () => {
 
   const handlePlaceSelectFromMap = useCallback(
     (place) => {
-      // 편집 모드가 아니거나 명시적인 추가 액션(검색 결과 추가 등)이 아닌 경우 일정에 추가하지 않음
       if (!isEditing) {
         if (place?.latitude && place?.longitude) {
           setSelectedPlaceForMap({
@@ -598,7 +593,6 @@ const PlanDetail = () => {
         return;
       }
 
-      // 지도 빈 곳 클릭(map-click)은 단순 포커스 및 위치 이동용으로만 쓰고 일정에 자동 추가되지 않도록 차단
       if (place?.source === "map-click") {
         const lat = Number(place.latitude);
         const lng = Number(place.longitude);
