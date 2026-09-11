@@ -1,5 +1,5 @@
 // ============================================================
-// PlanDetail.jsx 전체 수정 코드 (불필요한 코드 정리)
+// PlanDetail.jsx 전체 수정 코드 (날씨 정보 기능 추가)
 // ============================================================
 import React, {
   useCallback,
@@ -20,6 +20,7 @@ import {
   Save,
   Trash2,
   X,
+  CloudSun, // 날씨 아이콘 추가
 } from "lucide-react";
 import {
   DndContext,
@@ -393,6 +394,10 @@ const PlanDetail = () => {
   const [selectedPlaceForMap, setSelectedPlaceForMap] = useState(null);
   const [activeDragId, setActiveDragId] = useState(null);
 
+  // 날씨 정보 상태 추가
+  const [weatherInfo, setWeatherInfo] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -571,6 +576,40 @@ const PlanDetail = () => {
 
   const selectedDayItems = itemsByDay[selectedDayForMap] || [];
   const selectedRoutePath = routePathsByDay[selectedDayForMap] || [];
+
+  // 선택된 Day의 대표 장소(첫 번째 장소)를 기준으로 날씨 정보 조회 함수
+  const fetchWeatherForSelectedDay = useCallback(async (dayItems) => {
+    if (!dayItems || dayItems.length === 0) {
+      setWeatherInfo(null);
+      return;
+    }
+    const targetPlace = dayItems[0];
+    if (!targetPlace.latitude || !targetPlace.longitude) return;
+
+    try {
+      setWeatherLoading(true);
+      // 백엔드 날씨 API가 있다면 연동 (/api/weather 등)
+      // 예시: const res = await axiosInstance.get(`/api/weather?lat=${targetPlace.latitude}&lng=${targetPlace.longitude}`);
+      // setWeatherInfo(res.data);
+
+      // 백엔드 구현 전 임시 테스트용 Mock 데이터 연동 구조 (실제 API 호출 코드로 대체 가능)
+      setWeatherInfo({
+        temperature: "22°C",
+        description: "맑음",
+        locationName: targetPlace.placeName || "해당 지역",
+      });
+    } catch (err) {
+      console.error("날씨 정보를 불러오지 못했습니다.", err);
+      setWeatherInfo(null);
+    } finally {
+      setWeatherLoading(false);
+    }
+  }, []);
+
+  // 선택된 Day가 변경될 때마다 날씨 정보 갱신
+  useEffect(() => {
+    fetchWeatherForSelectedDay(selectedDayItems);
+  }, [selectedDayForMap, selectedDayItems, fetchWeatherForSelectedDay]);
 
   const handleDaySelect = (dNum) => {
     const day = Number(dNum);
@@ -959,6 +998,51 @@ const PlanDetail = () => {
 
           {/* Schedule List */}
           <div>
+            {/* 날씨 정보 위젯 영역 */}
+            <div
+              style={{
+                marginBottom: 16,
+                padding: "12px 16px",
+                background: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+                border: "1px solid #bfdbfe",
+                borderRadius: 12,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ ...S.flexRow, gap: 10 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    background: "#2563eb",
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <CloudSun size={20} />
+                </div>
+                <div>
+                  <div
+                    style={{ fontSize: 13, fontWeight: 700, color: "#1e40af" }}
+                  >
+                    DAY {selectedDayForMap} 날씨 정보
+                  </div>
+                  <div style={{ fontSize: 12, color: "#4b5563" }}>
+                    {weatherLoading
+                      ? "날씨 정보를 불러오는 중..."
+                      : weatherInfo
+                        ? `${weatherInfo.locationName} 기준 · 기온: ${weatherInfo.temperature} (${weatherInfo.description})`
+                        : "등록된 장소가 없어 날씨 정보를 확인할 수 없습니다."}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {dayNumbers.map((dNum) => {
               const dayItems = itemsByDay[dNum] || [];
               const schedule = scheduleByDay[dNum] || [];
