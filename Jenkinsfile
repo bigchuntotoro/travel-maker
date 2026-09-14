@@ -3,8 +3,8 @@ pipeline {
 
     tools {
         // Jenkins에 등록된 도구 이름에 맞게 수정하세요 (예: jdk17, nodejs 등)
-        jdk 'jdk-21'
-        nodejs 'node-24'
+        jdk 'JDK21'
+        nodejs 'NodeJS24'
     }
 
     stages {
