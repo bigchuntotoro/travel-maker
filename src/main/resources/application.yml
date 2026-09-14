@@ -17,6 +17,7 @@ mybatis:
 
 logging:
   level:
+    root: info
     com.example.travel.mapper: DEBUG # SQL 쿼리 로그 확인용
 
 kakao:
