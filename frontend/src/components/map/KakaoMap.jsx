@@ -1,6 +1,3 @@
-// ============================================================
-// KakaoMap.jsx 전체 수정 코드 (불필요한 코드 정리)
-// ============================================================
 import React, { useEffect, useRef, useState } from "react";
 
 const KakaoMap = ({
@@ -10,14 +7,17 @@ const KakaoMap = ({
   routePath = [],
 }) => {
   const mapContainer = useRef(null);
+  const mapWrapperRef = useRef(null);
   const mapInstance = useRef(null);
+
   const markersRef = useRef([]);
   const polylineRef = useRef(null);
   const selectedMarkerRef = useRef(null);
-  const onPlaceSelectRef = useRef(onPlaceSelect);
 
   const searchMarkersRef = useRef([]);
   const searchInfoWindowRef = useRef(null);
+
+  const onPlaceSelectRef = useRef(onPlaceSelect);
 
   const [mapReady, setMapReady] = useState(false);
 
@@ -26,9 +26,17 @@ const KakaoMap = ({
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState("");
 
+  // ============================================================
+  // 부모 callback 최신화
+  // ============================================================
+
   useEffect(() => {
     onPlaceSelectRef.current = onPlaceSelect;
   }, [onPlaceSelect]);
+
+  // ============================================================
+  // 장소 선택 callback
+  // ============================================================
 
   const notifyPlaceSelect = (place) => {
     if (!place) return;
@@ -47,17 +55,66 @@ const KakaoMap = ({
     });
   };
 
+  // ============================================================
+  // 지도 relayout
+  // ============================================================
+
+  const relayoutMap = () => {
+    const map = mapInstance.current;
+
+    if (!map) return;
+
+    try {
+      map.relayout();
+
+      const selected = selectedPlaceForMap;
+
+      if (
+        selected &&
+        Number.isFinite(Number(selected.lat)) &&
+        Number.isFinite(Number(selected.lng))
+      ) {
+        const position = new window.kakao.maps.LatLng(
+          Number(selected.lat),
+          Number(selected.lng),
+        );
+
+        map.panTo(position);
+      }
+    } catch (error) {
+      console.warn("KakaoMap relayout error:", error);
+    }
+  };
+
+  // ============================================================
+  // Kakao Map 초기화
+  // ============================================================
+
   useEffect(() => {
     let mounted = true;
     let timer = null;
 
     const initMap = () => {
-      if (!window.kakao?.maps || !mapContainer.current) {
+      if (!mounted) return;
+
+      if (!window.kakao?.maps) {
+        timer = setTimeout(initMap, 100);
+        return;
+      }
+
+      if (!mapContainer.current) {
+        timer = setTimeout(initMap, 100);
         return;
       }
 
       window.kakao.maps.load(() => {
         if (!mounted || !mapContainer.current) return;
+
+        // 이미 생성된 경우 중복 생성 방지
+        if (mapInstance.current) {
+          relayoutMap();
+          return;
+        }
 
         const options = {
           center: new window.kakao.maps.LatLng(37.5665, 126.978),
@@ -65,46 +122,114 @@ const KakaoMap = ({
         };
 
         const map = new window.kakao.maps.Map(mapContainer.current, options);
+
         mapInstance.current = map;
 
         setMapReady(true);
+
+        // 최초 렌더링 후 relayout
+        setTimeout(() => {
+          if (!mounted || !mapInstance.current) return;
+
+          try {
+            mapInstance.current.relayout();
+          } catch (error) {
+            console.warn("Initial relayout error:", error);
+          }
+        }, 100);
+
+        setTimeout(() => {
+          if (!mounted || !mapInstance.current) return;
+
+          try {
+            mapInstance.current.relayout();
+          } catch (error) {
+            console.warn("Delayed relayout error:", error);
+          }
+        }, 500);
       });
     };
 
-    if (window.kakao?.maps) {
-      initMap();
-    } else {
-      timer = setInterval(() => {
-        if (window.kakao?.maps) {
-          clearInterval(timer);
-          timer = null;
-          initMap();
-        }
-      }, 100);
-    }
+    initMap();
 
     return () => {
       mounted = false;
-      if (timer) clearInterval(timer);
+
+      if (timer) {
+        clearTimeout(timer);
+      }
     };
   }, []);
 
-  useEffect(() => {
-    if (!mapReady || !mapInstance.current) return;
-    const timer = setTimeout(() => {
-      mapInstance.current.relayout();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [mapReady]);
+  // ============================================================
+  // ResizeObserver
+  // 모바일 화면 / PC 화면 / 회전 대응
+  // ============================================================
 
   useEffect(() => {
-    if (!mapReady || !mapInstance.current || !selectedPlaceForMap) {
-      return;
+    if (!mapReady) return;
+
+    const wrapper = mapWrapperRef.current;
+
+    if (!wrapper) return;
+
+    let resizeTimer = null;
+
+    const handleResize = () => {
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+
+      resizeTimer = setTimeout(() => {
+        relayoutMap();
+      }, 100);
+    };
+
+    let observer = null;
+
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => {
+        handleResize();
+      });
+
+      observer.observe(wrapper);
     }
+
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+
+    return () => {
+      if (observer) {
+        observer.disconnect();
+      }
+
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+    };
+  }, [mapReady]);
+
+  // ============================================================
+  // 선택 장소 표시
+  // ============================================================
+
+  useEffect(() => {
+    if (!mapReady || !mapInstance.current) return;
+
+    if (selectedMarkerRef.current) {
+      selectedMarkerRef.current.setMap(null);
+      selectedMarkerRef.current = null;
+    }
+
+    if (!selectedPlaceForMap) return;
 
     const latitude = Number(
       selectedPlaceForMap.latitude ?? selectedPlaceForMap.lat,
     );
+
     const longitude = Number(
       selectedPlaceForMap.longitude ?? selectedPlaceForMap.lng,
     );
@@ -114,14 +239,11 @@ const KakaoMap = ({
     }
 
     const position = new window.kakao.maps.LatLng(latitude, longitude);
+
     mapInstance.current.panTo(position);
 
-    if (selectedMarkerRef.current) {
-      selectedMarkerRef.current.setMap(null);
-      selectedMarkerRef.current = null;
-    }
-
     const content = document.createElement("div");
+
     content.style.cssText = `
       padding:8px 12px;
       background:#d32f2f;
@@ -132,6 +254,7 @@ const KakaoMap = ({
       box-shadow:0 2px 6px rgba(0,0,0,.3);
       white-space:nowrap;
     `;
+
     content.textContent = selectedPlaceForMap.placeName || "선택 장소";
 
     selectedMarkerRef.current = new window.kakao.maps.CustomOverlay({
@@ -142,7 +265,15 @@ const KakaoMap = ({
     });
 
     selectedMarkerRef.current.setMap(mapInstance.current);
+
+    setTimeout(() => {
+      relayoutMap();
+    }, 50);
   }, [selectedPlaceForMap, mapReady]);
+
+  // ============================================================
+  // 일정 장소 마커
+  // ============================================================
 
   useEffect(() => {
     if (!mapReady || !mapInstance.current) return;
@@ -150,9 +281,12 @@ const KakaoMap = ({
     markersRef.current.forEach((marker) => {
       marker.setMap(null);
     });
+
     markersRef.current = [];
 
-    if (!items.length) return;
+    if (!items.length) {
+      return;
+    }
 
     const bounds = new window.kakao.maps.LatLngBounds();
 
@@ -165,9 +299,11 @@ const KakaoMap = ({
       }
 
       const position = new window.kakao.maps.LatLng(latitude, longitude);
+
       bounds.extend(position);
 
       const content = document.createElement("div");
+
       content.style.cssText = `
         padding:7px 10px;
         background:#1976d2;
@@ -177,7 +313,11 @@ const KakaoMap = ({
         font-weight:700;
         box-shadow:0 2px 5px rgba(0,0,0,.3);
         white-space:nowrap;
+        max-width:180px;
+        overflow:hidden;
+        text-overflow:ellipsis;
       `;
+
       content.textContent = `${index + 1}. ${item.placeName || "장소"}`;
 
       const overlay = new window.kakao.maps.CustomOverlay({
@@ -188,13 +328,22 @@ const KakaoMap = ({
       });
 
       overlay.setMap(mapInstance.current);
+
       markersRef.current.push(overlay);
     });
 
     if (!bounds.isEmpty()) {
       mapInstance.current.setBounds(bounds);
     }
+
+    setTimeout(() => {
+      relayoutMap();
+    }, 100);
   }, [items, mapReady]);
+
+  // ============================================================
+  // 실제 도로 경로
+  // ============================================================
 
   useEffect(() => {
     if (!mapReady || !mapInstance.current) return;
@@ -204,11 +353,14 @@ const KakaoMap = ({
       polylineRef.current = null;
     }
 
-    if (!routePath?.length) return;
+    if (!routePath?.length) {
+      return;
+    }
 
     const path = routePath
       .map((point) => {
         const latitude = Number(point.latitude ?? point.lat);
+
         const longitude = Number(point.longitude ?? point.lng);
 
         if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -232,12 +384,29 @@ const KakaoMap = ({
     polylineRef.current.setMap(mapInstance.current);
 
     const bounds = new window.kakao.maps.LatLngBounds();
-    path.forEach((point) => bounds.extend(point));
-    mapInstance.current.setBounds(bounds);
+
+    path.forEach((point) => {
+      bounds.extend(point);
+    });
+
+    if (!bounds.isEmpty()) {
+      mapInstance.current.setBounds(bounds);
+    }
+
+    setTimeout(() => {
+      relayoutMap();
+    }, 100);
   }, [routePath, mapReady]);
 
+  // ============================================================
+  // 검색 마커 삭제
+  // ============================================================
+
   const clearSearchMarkers = () => {
-    searchMarkersRef.current.forEach((marker) => marker.setMap(null));
+    searchMarkersRef.current.forEach((marker) => {
+      marker.setMap(null);
+    });
+
     searchMarkersRef.current = [];
 
     if (searchInfoWindowRef.current) {
@@ -245,6 +414,10 @@ const KakaoMap = ({
       searchInfoWindowRef.current = null;
     }
   };
+
+  // ============================================================
+  // 검색 결과를 일정에 추가
+  // ============================================================
 
   const addSearchPlaceToPlan = (place) => {
     if (!place) return;
@@ -258,9 +431,12 @@ const KakaoMap = ({
 
     const selectedPlace = {
       placeName: place.place_name || "검색 장소",
+
       address: place.road_address_name || place.address_name || "",
+
       latitude,
       longitude,
+
       isSearchPlace: false,
       source: "map-search-add",
     };
@@ -274,8 +450,14 @@ const KakaoMap = ({
 
     setSearchResults([]);
     setSearchKeyword("");
+    setSearchMessage("");
+
     clearSearchMarkers();
   };
+
+  // ============================================================
+  // 검색 결과 상세 팝업
+  // ============================================================
 
   const showSearchPlaceInfo = (place, position) => {
     if (!mapInstance.current) return;
@@ -286,9 +468,10 @@ const KakaoMap = ({
     }
 
     const wrapper = document.createElement("div");
+
     wrapper.style.cssText = `
-      min-width:260px;
-      max-width:300px;
+      width:min(300px, calc(100vw - 40px));
+      box-sizing:border-box;
       padding:14px;
       background:#fff;
       border:1px solid #ddd;
@@ -302,38 +485,70 @@ const KakaoMap = ({
     });
 
     const title = document.createElement("div");
-    title.style.cssText = `font-size:15px; font-weight:700; margin-bottom:8px; color:#222;`;
+
+    title.style.cssText = `
+      font-size:15px;
+      font-weight:700;
+      margin-bottom:8px;
+      color:#222;
+      line-height:1.4;
+    `;
+
     title.textContent = place.place_name || "장소";
+
     wrapper.appendChild(title);
 
     if (place.category_name) {
       const category = document.createElement("div");
-      category.style.cssText = `color:#666; margin-bottom:5px;`;
+
+      category.style.cssText = `
+        color:#666;
+        margin-bottom:5px;
+        line-height:1.4;
+      `;
+
       category.textContent = place.category_name;
+
       wrapper.appendChild(category);
     }
 
     const address = document.createElement("div");
-    address.style.cssText = `color:#555; line-height:1.4; margin-bottom:6px;`;
+
+    address.style.cssText = `
+      color:#555;
+      line-height:1.4;
+      margin-bottom:6px;
+      word-break:keep-all;
+    `;
+
     address.textContent =
       place.road_address_name || place.address_name || "주소 없음";
+
     wrapper.appendChild(address);
 
     if (place.phone) {
       const phone = document.createElement("div");
-      phone.style.cssText = `color:#555; margin-bottom:10px;`;
+
+      phone.style.cssText = `
+        color:#555;
+        margin-bottom:10px;
+      `;
+
       phone.textContent = place.phone;
+
       wrapper.appendChild(phone);
     }
 
     const addButton = document.createElement("button");
+
     addButton.type = "button";
     addButton.textContent = "일정에 추가";
+
     addButton.style.cssText = `
       width:100%;
       border:none;
       border-radius:7px;
-      padding:9px 12px;
+      padding:10px 12px;
       background:#1976d2;
       color:#fff;
       font-size:13px;
@@ -344,6 +559,7 @@ const KakaoMap = ({
     addButton.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+
       addSearchPlaceToPlan(place);
     });
 
@@ -359,10 +575,15 @@ const KakaoMap = ({
     searchInfoWindowRef.current.setMap(mapInstance.current);
   };
 
+  // ============================================================
+  // 현재 지도 영역에서 장소 검색
+  // ============================================================
+
   const searchPlacesInCurrentMap = () => {
     if (!mapInstance.current) return;
 
     const keyword = searchKeyword.trim();
+
     if (!keyword) {
       setSearchMessage("검색어를 입력해주세요.");
       return;
@@ -374,12 +595,15 @@ const KakaoMap = ({
     }
 
     clearSearchMarkers();
+
     setIsSearching(true);
     setSearchMessage("");
     setSearchResults([]);
 
     const places = new window.kakao.maps.services.Places();
+
     const bounds = mapInstance.current.getBounds();
+
     const allResults = [];
     const seen = new Set();
 
@@ -400,11 +624,17 @@ const KakaoMap = ({
                 latitude,
                 longitude,
               );
-              if (!bounds.contain(position)) return;
+
+              if (!bounds.contain(position)) {
+                return;
+              }
 
               const key =
                 place.id || `${place.place_name}_${place.x}_${place.y}`;
-              if (seen.has(key)) return;
+
+              if (seen.has(key)) {
+                return;
+              }
 
               seen.add(key);
               allResults.push(place);
@@ -417,6 +647,7 @@ const KakaoMap = ({
           }
 
           displaySearchResults(allResults);
+
           setSearchResults(allResults);
           setIsSearching(false);
 
@@ -424,25 +655,38 @@ const KakaoMap = ({
             setSearchMessage("현재 지도 영역에서 검색 결과가 없습니다.");
           }
         },
-        { bounds, page, size: 15 },
+        {
+          bounds,
+          page,
+          size: 15,
+        },
       );
     };
 
     searchPage(1);
   };
 
+  // ============================================================
+  // 검색 결과 마커 표시
+  // ============================================================
+
   const displaySearchResults = (results) => {
     if (!mapInstance.current) return;
+
     clearSearchMarkers();
 
     results.forEach((place, index) => {
       const latitude = Number(place.y);
       const longitude = Number(place.x);
 
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return;
+      }
 
       const position = new window.kakao.maps.LatLng(latitude, longitude);
+
       const markerElement = document.createElement("div");
+
       markerElement.style.cssText = `
         width:30px;
         height:30px;
@@ -458,11 +702,13 @@ const KakaoMap = ({
         font-weight:700;
         cursor:pointer;
       `;
+
       markerElement.textContent = String(index + 1);
 
       markerElement.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
+
         showSearchPlaceInfo(place, position);
       });
 
@@ -474,9 +720,14 @@ const KakaoMap = ({
       });
 
       marker.setMap(mapInstance.current);
+
       searchMarkersRef.current.push(marker);
     });
   };
+
+  // ============================================================
+  // 검색 결과 클릭
+  // ============================================================
 
   const handleSearchResultClick = (place) => {
     if (!mapInstance.current) return;
@@ -484,70 +735,100 @@ const KakaoMap = ({
     const latitude = Number(place.y);
     const longitude = Number(place.x);
 
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return;
+    }
 
     const position = new window.kakao.maps.LatLng(latitude, longitude);
+
     mapInstance.current.panTo(position);
+
     showSearchPlaceInfo(place, position);
 
     setSearchResults([]);
   };
 
+  // ============================================================
+  // 정리
+  // ============================================================
+
   useEffect(() => {
     return () => {
       clearSearchMarkers();
+
       markersRef.current.forEach((marker) => marker.setMap(null));
+
       markersRef.current = [];
+
       if (polylineRef.current) {
         polylineRef.current.setMap(null);
         polylineRef.current = null;
       }
+
       if (selectedMarkerRef.current) {
         selectedMarkerRef.current.setMap(null);
         selectedMarkerRef.current = null;
       }
+
       mapInstance.current = null;
     };
   }, []);
 
+  // ============================================================
+  // 화면
+  // ============================================================
+
   return (
     <div
+      ref={mapWrapperRef}
+      className="kakao-map-wrapper"
       style={{
         width: "100%",
         height: "100%",
-        minHeight: "650px",
-        borderRadius: "12px",
-        overflow: "hidden",
+        minHeight: 0,
         position: "relative",
+        overflow: "hidden",
+        borderRadius: 12,
+        background: "#f3f4f6",
       }}
     >
+      {/* 실제 지도 */}
       <div
         ref={mapContainer}
+        className="kakao-map-container"
         style={{
           width: "100%",
           height: "100%",
-          minHeight: "650px",
+          minHeight: 0,
           cursor: "crosshair",
         }}
       />
 
+      {/* 지도 검색 */}
       {mapReady && (
         <div
+          className="kakao-map-search"
           style={{
             position: "absolute",
-            top: "15px",
-            left: "15px",
-            width: "330px",
-            maxHeight: "520px",
+            top: 15,
+            left: 15,
+            width: "min(330px, calc(100% - 30px))",
+            maxHeight: 520,
             background: "#fff",
-            borderRadius: "10px",
+            borderRadius: 10,
             boxShadow: "0 3px 12px rgba(0,0,0,.2)",
             overflow: "hidden",
             zIndex: 300,
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ display: "flex", padding: "10px", gap: "6px" }}>
+          <div
+            style={{
+              display: "flex",
+              padding: 10,
+              gap: 6,
+            }}
+          >
             <input
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
@@ -562,22 +843,25 @@ const KakaoMap = ({
                 minWidth: 0,
                 padding: "9px 10px",
                 border: "1px solid #ddd",
-                borderRadius: "7px",
+                borderRadius: 7,
                 outline: "none",
+                fontSize: 13,
               }}
             />
+
             <button
               type="button"
               onClick={searchPlacesInCurrentMap}
               disabled={isSearching}
               style={{
                 border: "none",
-                borderRadius: "7px",
+                borderRadius: 7,
                 padding: "0 13px",
                 background: "#1976d2",
                 color: "#fff",
                 fontWeight: 700,
                 cursor: isSearching ? "default" : "pointer",
+                whiteSpace: "nowrap",
               }}
             >
               {isSearching ? "검색중" : "검색"}
@@ -589,7 +873,7 @@ const KakaoMap = ({
               style={{
                 padding: "0 12px 10px",
                 color: "#777",
-                fontSize: "12px",
+                fontSize: 12,
               }}
             >
               {searchMessage}
@@ -599,81 +883,86 @@ const KakaoMap = ({
           {searchResults.length > 0 && (
             <div
               style={{
-                borderTop: "1px solid #eee",
-                maxHeight: "420px",
+                maxHeight: 390,
                 overflowY: "auto",
+                borderTop: "1px solid #eee",
               }}
             >
-              <div
-                style={{
-                  padding: "9px 12px",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  color: "#555",
-                  background: "#fafafa",
-                }}
-              >
-                검색 결과 {searchResults.length}개
-                <span
-                  style={{ marginLeft: "6px", color: "#999", fontWeight: 400 }}
-                >
-                  장소를 클릭하면 정보를 확인할 수 있습니다.
-                </span>
-              </div>
-
               {searchResults.map((place, index) => (
-                <div
-                  key={place.id || `${place.place_name}-${place.x}-${place.y}`}
+                <button
+                  key={place.id || `${place.x}-${place.y}-${index}`}
+                  type="button"
                   onClick={() => handleSearchResultClick(place)}
                   style={{
+                    width: "100%",
+                    border: "none",
+                    borderBottom: "1px solid #eee",
+                    background: "#fff",
                     padding: "10px 12px",
-                    borderTop: "1px solid #f1f1f1",
+                    textAlign: "left",
                     cursor: "pointer",
                   }}
                 >
-                  <div style={{ display: "flex", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "flex-start",
+                    }}
+                  >
                     <span
                       style={{
-                        flexShrink: 0,
-                        width: "24px",
-                        height: "24px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        width: 22,
+                        height: 22,
                         borderRadius: "50%",
                         background: "#e53935",
                         color: "#fff",
-                        fontSize: "11px",
-                        fontWeight: "700",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        flexShrink: 0,
                       }}
                     >
                       {index + 1}
                     </span>
-                    <div style={{ minWidth: 0 }}>
+
+                    <div
+                      style={{
+                        minWidth: 0,
+                        flex: 1,
+                      }}
+                    >
                       <div
                         style={{
+                          fontSize: 13,
                           fontWeight: 700,
-                          fontSize: "13px",
-                          marginBottom: "3px",
+                          color: "#111827",
+                          marginBottom: 3,
                         }}
                       >
                         {place.place_name}
                       </div>
+
                       <div
                         style={{
-                          color: "#777",
-                          fontSize: "11px",
+                          fontSize: 11,
+                          color: "#6b7280",
                           lineHeight: 1.4,
                         }}
                       >
-                        {place.road_address_name || place.address_name || ""}
+                        {place.road_address_name ||
+                          place.address_name ||
+                          "주소 없음"}
                       </div>
+
                       {place.category_name && (
                         <div
                           style={{
-                            color: "#999",
-                            fontSize: "10px",
-                            marginTop: "3px",
+                            fontSize: 10,
+                            color: "#9ca3af",
+                            marginTop: 2,
                           }}
                         >
                           {place.category_name}
@@ -681,28 +970,29 @@ const KakaoMap = ({
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
+        </div>
+      )}
 
-          {searchResults.length > 0 && (
-            <button
-              type="button"
-              onClick={searchPlacesInCurrentMap}
-              style={{
-                width: "100%",
-                border: "none",
-                borderTop: "1px solid #eee",
-                background: "#fafafa",
-                padding: "9px",
-                fontSize: "12px",
-                cursor: "pointer",
-              }}
-            >
-              현재 지도에서 다시 검색
-            </button>
-          )}
+      {/* 모바일용 안내 */}
+      {!mapReady && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#f3f4f6",
+            color: "#6b7280",
+            fontSize: 13,
+            zIndex: 10,
+          }}
+        >
+          카카오 지도를 불러오는 중...
         </div>
       )}
     </div>
