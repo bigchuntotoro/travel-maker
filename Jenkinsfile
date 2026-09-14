@@ -9,7 +9,6 @@ pipeline {
         APP_NAME        = 'travel-maker'
         SERVICE_NAME    = 'travel-maker'
 
-        // 사용자 컨텍스트 반영: frontend는 프로젝트 root에 위치
         FRONTEND_DIR    = "${WORKSPACE}/frontend"
         STATIC_OUT_DIR  = "${WORKSPACE}/src/main/resources/static"
 
@@ -40,7 +39,7 @@ pipeline {
         }
 
         // =================================================
-        // 2. React Frontend Build & Copy to Spring Boot Static
+        // 2. React Frontend Build (Vite outputs directly to static)
         // =================================================
         stage('2. Build Frontend (React - Vite)') {
             steps {
@@ -57,7 +56,11 @@ pipeline {
                         echo "================================================="
                         echo "==> Installing NPM Dependencies"
                         echo "================================================="
-                        npm ci --prefer-offline
+                        if [ ! -d "node_modules" ]; then
+                            npm ci --prefer-offline
+                        else
+                            npm ci --prefer-offline
+                        fi
 
                         echo ""
                         echo "================================================="
@@ -67,23 +70,11 @@ pipeline {
                     """
                 }
 
-                // Vite 빌드 결과물(dist 등)을 Spring Boot static 경로로 복사
                 sh """
                     set -e
                     echo "================================================="
-                    echo "==> Copying Frontend Build to Spring Boot Static"
+                    echo "==> Verifying Spring Boot Static Dir"
                     echo "================================================="
-
-                    mkdir -p "${STATIC_OUT_DIR}"
-
-                    # Vite 기본 빌드 결과물 디렉터리(dist) 안의 내용물들을 static으로 이동
-                    if [ -d "${FRONTEND_DIR}/dist" ]; then
-                        rm -rf "${STATIC_OUT_DIR}/*"
-                        cp -r "${FRONTEND_DIR}/dist/." "${STATIC_OUT_DIR}/"
-                    else
-                        echo "ERROR: Frontend dist directory not found."
-                        exit 1
-                    fi
 
                     ls -lah "${STATIC_OUT_DIR}"
                 """
@@ -166,6 +157,7 @@ pipeline {
                     STARTED=false
 
                     for i in \$(seq 1 30); do
+                        # 기본 포트 응답 체크
                         HTTP_CODE=\$(curl \\
                             -s \\
                             -o /dev/null \\
@@ -193,6 +185,8 @@ pipeline {
                     echo "================================================="
                     echo "==> Verifying Database Connection via Logs"
                     echo "================================================="
+                    # systemd 저널 로그에서 DB 연결 관련 에러 키워드가 있는지 검사
+                    # (예: HikariPool, Communications link failure, Access denied 등)
                     RECENT_LOGS=\$(sudo journalctl -u ${SERVICE_NAME} -n 30 --no-pager)
 
                     if echo "\$RECENT_LOGS" | grep -E -i "HikariPool.*Exception|Communications link failure|Access denied|Connection refused"; then
