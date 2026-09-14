@@ -1825,27 +1825,31 @@ const PlanDetail = () => {
         >
           {printPages.map((pageDays, pageIndex) => (
             <div className="travel-print-page" key={`print-page-${pageIndex}`}>
-              <div className="travel-print-header">
-                <div className="travel-print-brand">T R A V E L M A K E R</div>
-                <div className="travel-print-main-title">
-                  {plan?.title || "여행 일정표"}
+              {pageIndex === 0 && (
+                <div className="travel-print-header">
+                  <div className="travel-print-brand">
+                    T R A V E L M A K E R
+                  </div>
+                  <div className="travel-print-main-title">
+                    {plan?.title || "여행 일정표"}
+                  </div>
+                  <div className="travel-print-meta">
+                    <span>
+                      📅 기간:{" "}
+                      {formatPrintDate(
+                        isEditing ? editStartDate : plan?.startDate,
+                        true,
+                      )}
+                      {" ~ "}
+                      {formatPrintDate(
+                        isEditing ? editEndDate : plan?.endDate,
+                        true,
+                      )}
+                    </span>
+                    <span>여행자: {getTravelerName()} 님</span>
+                  </div>
                 </div>
-                <div className="travel-print-meta">
-                  <span>
-                    📅 기간:{" "}
-                    {formatPrintDate(
-                      isEditing ? editStartDate : plan?.startDate,
-                      true,
-                    )}
-                    {" ~ "}
-                    {formatPrintDate(
-                      isEditing ? editEndDate : plan?.endDate,
-                      true,
-                    )}
-                  </span>
-                  <span>여행자: {getTravelerName()} 님</span>
-                </div>
-              </div>
+              )}
 
               <div className="travel-print-days">
                 {pageDays.map((day) => (
@@ -1998,29 +2002,31 @@ const PlanDetail = () => {
               <div className="travel-preview-sheet">
                 {printPages[previewPageIndex] && (
                   <div className="travel-print-page">
-                    <div className="travel-print-header">
-                      <div className="travel-print-brand">
-                        T R A V E L M A K E R
+                    {previewPageIndex === 0 && (
+                      <div className="travel-print-header">
+                        <div className="travel-print-brand">
+                          T R A V E L M A K E R
+                        </div>
+                        <div className="travel-print-main-title">
+                          {plan?.title || "여행 일정표"}
+                        </div>
+                        <div className="travel-print-meta">
+                          <span>
+                            📅 기간:{" "}
+                            {formatPrintDate(
+                              isEditing ? editStartDate : plan?.startDate,
+                              true,
+                            )}
+                            {" ~ "}
+                            {formatPrintDate(
+                              isEditing ? editEndDate : plan?.endDate,
+                              true,
+                            )}
+                          </span>
+                          <span>여행자: {getTravelerName()} 님</span>
+                        </div>
                       </div>
-                      <div className="travel-print-main-title">
-                        {plan?.title || "여행 일정표"}
-                      </div>
-                      <div className="travel-print-meta">
-                        <span>
-                          📅 기간:{" "}
-                          {formatPrintDate(
-                            isEditing ? editStartDate : plan?.startDate,
-                            true,
-                          )}
-                          {" ~ "}
-                          {formatPrintDate(
-                            isEditing ? editEndDate : plan?.endDate,
-                            true,
-                          )}
-                        </span>
-                        <span>여행자: {getTravelerName()} 님</span>
-                      </div>
-                    </div>
+                    )}
 
                     <div className="travel-print-days">
                       {printPages[previewPageIndex].map((day) => (
