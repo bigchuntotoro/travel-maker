@@ -1079,28 +1079,70 @@ const PlanDetail = () => {
 
   const handleClosePreview = useCallback(() => {
     setPreviewOpen(false);
+    setPreviewPageIndex(0);
   }, []);
+
+  const handlePreviewPrevious = useCallback((event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    setPreviewPageIndex((prev) => Math.max(0, prev - 1));
+  }, []);
+
+  const handlePreviewNext = useCallback(
+    (event) => {
+      event?.preventDefault();
+      event?.stopPropagation();
+      setPreviewPageIndex((prev) =>
+        Math.min(Math.max(printPages.length - 1, 0), prev + 1),
+      );
+    },
+    [printPages.length],
+  );
 
   useEffect(() => {
     if (!previewOpen) return undefined;
+
     const onKeyDown = (event) => {
-      if (event.key === "Escape") setPreviewOpen(false);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleClosePreview();
+        return;
+      }
       if (event.key === "ArrowLeft") {
+        event.preventDefault();
         setPreviewPageIndex((prev) => Math.max(0, prev - 1));
       }
       if (event.key === "ArrowRight") {
+        event.preventDefault();
         setPreviewPageIndex((prev) =>
           Math.min(Math.max(printPages.length - 1, 0), prev + 1),
         );
       }
     };
+
     window.addEventListener("keydown", onKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
+  }, [previewOpen, printPages.length, handleClosePreview]);
+
+  useEffect(() => {
+    if (previewOpen) {
+      setPreviewPageIndex((prev) =>
+        Math.min(Math.max(printPages.length - 1, 0), prev),
+      );
+    }
+  }, [previewOpen, printPages.length]);
+
+  useEffect(() => {
+    if (!previewOpen) return;
+    setPreviewPageIndex((prev) =>
+      Math.min(Math.max(printPages.length - 1, 0), prev),
+    );
   }, [previewOpen, printPages.length]);
 
   const handleSave = useCallback(async () => {
@@ -1201,12 +1243,15 @@ const PlanDetail = () => {
         .travel-detail-date input { max-width: 145px; border: 1px solid #d1d5db; border-radius: 6px; padding: 5px 7px; }
         .travel-detail-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
         .travel-export-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
-        .travel-preview-backdrop { position: fixed; inset: 0; z-index: 99999; background: rgba(15, 23, 42, 0.72); display: flex; flex-direction: column; }
-        .travel-preview-toolbar { min-height: 58px; padding: 10px 16px; box-sizing: border-box; background: #ffffff; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e5e7eb; flex-shrink: 0; }
+        .travel-preview-backdrop { position: fixed; inset: 0; z-index: 999999; background: rgba(15, 23, 42, 0.82); display: flex; flex-direction: column; isolation: isolate; }
+        .travel-preview-toolbar { min-height: 64px; padding: 10px 16px; box-sizing: border-box; background: #ffffff; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e5e7eb; flex-shrink: 0; position: relative; z-index: 2; }
         .travel-preview-toolbar-left, .travel-preview-toolbar-right { display: flex; align-items: center; gap: 8px; }
         .travel-preview-title { font-size: 14px; font-weight: 800; color: #111827; }
-        .travel-preview-page-count { font-size: 12px; color: #6b7280; }
-        .travel-preview-nav-button { width: 34px; height: 34px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #374151; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .travel-preview-page-count { font-size: 12px; color: #6b7280; margin-right: 4px; }
+        .travel-preview-nav-button { width: 34px; height: 34px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #374151; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+        .travel-preview-nav-button:disabled { opacity: 0.4; cursor: default; }
+        .travel-preview-export-button { height: 34px; padding: 0 11px; border: 1px solid #dbeafe; border-radius: 7px; background: #eff6ff; color: #1d4ed8; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .travel-preview-export-button:disabled { opacity: 0.55; cursor: default; }
         .travel-preview-nav-button:disabled { opacity: .4; cursor: default; }
         .travel-preview-close { border: 1px solid #d1d5db; border-radius: 7px; padding: 8px 12px; background: #fff; cursor: pointer; font-weight: 700; color: #374151; }
         .travel-preview-content { flex: 1; overflow: auto; padding: 24px; box-sizing: border-box; display: flex; justify-content: center; align-items: flex-start; }
@@ -1214,10 +1259,32 @@ const PlanDetail = () => {
         .travel-preview-sheet .travel-print-page { position: relative !important; left: auto !important; top: auto !important; width: 794px !important; height: 1123px !important; min-height: 1123px !important; margin: 0 !important; box-sizing: border-box !important; }
         .travel-preview-sheet .travel-print-page:last-child { page-break-after: auto !important; }
         @media (max-width: 768px) {
-          .travel-preview-content { padding: 12px; }
-          .travel-preview-sheet { transform: scale(calc((100vw - 24px) / 794)); margin-bottom: calc(-1123px * (1 - min(1, ((100vw - 24px) / 794)))); }
-          .travel-preview-toolbar { padding: 8px 10px; }
-          .travel-preview-title { font-size: 13px; }
+          .travel-preview-toolbar {
+            min-height: 58px;
+            padding: 8px;
+            gap: 6px;
+          }
+          .travel-preview-toolbar-left {
+            min-width: 0;
+            gap: 5px;
+          }
+          .travel-preview-toolbar-right {
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+          }
+          .travel-preview-title { font-size: 12px; }
+          .travel-preview-page-count { font-size: 11px; }
+          .travel-preview-export-button { padding: 0 8px; }
+          .travel-preview-content {
+            padding: 12px;
+            overflow: auto;
+          }
+          .travel-preview-sheet {
+            transform: scale(min(1, calc((100vw - 24px) / 794)));
+            transform-origin: top center;
+            margin-bottom: calc(-1123px * (1 - min(1, calc((100vw - 24px) / 794))));
+          }
         }
         .travel-detail-grid { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
         .travel-map-wrapper { position: sticky; top: 15px; height: 650px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
@@ -1559,38 +1626,6 @@ const PlanDetail = () => {
               <button
                 type="button"
                 className="travel-export-button"
-                onClick={handleExportImage}
-                disabled={exporting}
-                style={{
-                  ...S.btnBase,
-                  border: "1px solid #dbeafe",
-                  background: exporting ? "#f1f5f9" : "#eff6ff",
-                  color: "#1d4ed8",
-                  cursor: exporting ? "default" : "pointer",
-                }}
-              >
-                <Download size={15} />
-                {exporting ? "생성 중..." : "이미지"}
-              </button>
-              <button
-                type="button"
-                className="travel-export-button"
-                onClick={handleExportPdf}
-                disabled={exporting}
-                style={{
-                  ...S.btnBase,
-                  border: "1px solid #dbeafe",
-                  background: exporting ? "#f1f5f9" : "#eff6ff",
-                  color: "#1d4ed8",
-                  cursor: exporting ? "default" : "pointer",
-                }}
-              >
-                <Download size={15} />
-                PDF
-              </button>
-              <button
-                type="button"
-                className="travel-export-button"
                 onClick={handlePrint}
                 disabled={exporting}
                 style={{
@@ -1878,10 +1913,17 @@ const PlanDetail = () => {
             aria-modal="true"
             aria-label="여행 일정표 미리보기"
             onMouseDown={(e) => {
-              if (e.target === e.currentTarget) handleClosePreview();
+              if (e.target === e.currentTarget) {
+                e.preventDefault();
+                handleClosePreview();
+              }
             }}
           >
-            <div className="travel-preview-toolbar">
+            <div
+              className="travel-preview-toolbar"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="travel-preview-toolbar-left">
                 <Eye size={17} color="#2563eb" />
                 <span className="travel-preview-title">
@@ -1894,39 +1936,65 @@ const PlanDetail = () => {
               <div className="travel-preview-toolbar-right">
                 <button
                   type="button"
+                  className="travel-preview-export-button"
+                  onClick={handleExportImage}
+                  disabled={exporting}
+                  title="현재 일정표를 PNG 이미지로 저장"
+                >
+                  <Download size={14} />
+                  {exporting ? "생성 중..." : "이미지"}
+                </button>
+                <button
+                  type="button"
+                  className="travel-preview-export-button"
+                  onClick={handleExportPdf}
+                  disabled={exporting}
+                  title="전체 일정표를 PDF로 저장"
+                >
+                  <Download size={14} />
+                  PDF
+                </button>
+                <button
+                  type="button"
                   className="travel-preview-nav-button"
-                  onClick={() =>
-                    setPreviewPageIndex((prev) => Math.max(0, prev - 1))
-                  }
+                  onClick={handlePreviewPrevious}
                   disabled={previewPageIndex === 0}
                   aria-label="이전 페이지"
+                  title="이전 페이지"
                 >
                   ‹
                 </button>
                 <button
                   type="button"
                   className="travel-preview-nav-button"
-                  onClick={() =>
-                    setPreviewPageIndex((prev) =>
-                      Math.min(Math.max(printPages.length - 1, 0), prev + 1),
-                    )
-                  }
+                  onClick={handlePreviewNext}
                   disabled={previewPageIndex >= printPages.length - 1}
                   aria-label="다음 페이지"
+                  title="다음 페이지"
                 >
                   ›
                 </button>
                 <button
                   type="button"
                   className="travel-preview-close"
-                  onClick={handleClosePreview}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleClosePreview();
+                  }}
+                  aria-label="미리보기 닫기"
                 >
+                  <X size={15} />
                   닫기
                 </button>
               </div>
             </div>
 
-            <div className="travel-preview-content">
+            <div
+              className="travel-preview-content"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="travel-preview-sheet">
                 {printPages[previewPageIndex] && (
                   <div className="travel-print-page">
