@@ -1568,13 +1568,20 @@ const PlanDetail = () => {
             width: 210mm !important;
             height: 297mm !important;
             min-height: 297mm !important;
-            page-break-after: always;
-            break-after: page;
+            max-height: 297mm !important;
+            box-sizing: border-box !important;
             padding: 12mm 13mm 10mm !important;
+            overflow: hidden !important;
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
+          .travel-print-page:not(:last-child) {
+            page-break-after: always !important;
+            break-after: page !important;
           }
           .travel-print-page:last-child {
-            page-break-after: auto;
-            break-after: auto;
+            page-break-after: auto !important;
+            break-after: auto !important;
           }
         }
 
