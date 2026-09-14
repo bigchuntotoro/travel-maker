@@ -1,7 +1,3 @@
-// ============================================================
-// PlanDetail.jsx (Refactored)
-// ============================================================
-
 import React, {
   useCallback,
   useEffect,
@@ -16,7 +12,9 @@ import {
   Car,
   Clock3,
   CloudSun,
+  Download,
   GripVertical,
+  Printer,
   MapPin,
   Pencil,
   Save,
@@ -43,6 +41,8 @@ import { CSS } from "@dnd-kit/utilities";
 
 import axiosInstance from "../api/axiosInstance";
 import KakaoMap from "../components/map/KakaoMap";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 const DEFAULT_START_TIME = "09:00";
 const STAY_OPTIONS = [30, 60, 90, 120, 150, 180, 240];
@@ -421,6 +421,12 @@ const PlanDetail = () => {
   const [weatherInfo, setWeatherInfo] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
 
+  // ============================================================
+  // A4 출력 / 이미지 / PDF 내보내기
+  // ============================================================
+  const printContainerRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -793,6 +799,275 @@ const PlanDetail = () => {
     return result;
   }, [dayNumbers, itemsByDay, routeSections]);
 
+  // ============================================================
+  // 출력용 데이터/포맷 헬퍼
+  // ============================================================
+  const getTravelerName = useCallback(() => {
+    const directName =
+      plan?.travelerName ||
+      plan?.userName ||
+      plan?.nickname ||
+      plan?.memberName;
+
+    if (directName) return String(directName);
+
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) {
+        const user = JSON.parse(raw);
+        return user?.nickname || user?.name || user?.username || "여행자";
+      }
+    } catch {
+      // localStorage의 user JSON이 깨져 있어도 출력 기능은 계속 동작합니다.
+    }
+
+    return "여행자";
+  }, [plan]);
+
+  const formatPrintDate = useCallback((value, withYear = false) => {
+    if (!value) return "";
+    const text = String(value).slice(0, 10);
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return String(value);
+
+    const [, year, month, day] = match;
+    return withYear
+      ? `${year}.${month}.${day}`
+      : `${Number(month)}월 ${Number(day)}일`;
+  }, []);
+
+  const getPrintWeekday = useCallback((value) => {
+    if (!value) return "";
+    const text = String(value).slice(0, 10);
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return "";
+
+    const date = new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+    );
+    if (Number.isNaN(date.getTime())) return "";
+
+    return ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  }, []);
+
+  const getPrintDayDate = useCallback(
+    (dayNumber) => {
+      const startDate = isEditing ? editStartDate : plan?.startDate;
+      if (!startDate) return "";
+
+      const text = String(startDate).slice(0, 10);
+      const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) return "";
+
+      const date = new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3]),
+      );
+      if (Number.isNaN(date.getTime())) return "";
+
+      date.setDate(date.getDate() + Number(dayNumber || 1) - 1);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    },
+    [isEditing, editStartDate, plan?.startDate],
+  );
+
+  const getPrintDayTitle = useCallback((dayNumber, dayItems = []) => {
+    // 백엔드에서 dayTitle/dayName/title 등을 내려주는 경우 우선 사용합니다.
+    const explicitTitle =
+      dayItems.find((item) => item?.dayTitle)?.dayTitle ||
+      dayItems.find((item) => item?.dayName)?.dayName ||
+      dayItems.find((item) => item?.dayDescription)?.dayDescription;
+
+    if (explicitTitle) return String(explicitTitle);
+
+    const names = dayItems
+      .map((item) => String(item?.placeName || "").trim())
+      .filter(Boolean);
+    const text = names.join(" ");
+
+    if (/제주|애월|성산|서귀포|우도|한림/.test(text)) {
+      return dayNumber === 1 ? "제주 주요 관광지 탐방" : "제주 지역 여행";
+    }
+    if (/서울|경복궁|명동|홍대|강남|한강|북촌|잠실/.test(text)) {
+      return dayNumber === 1 ? "서울 주요 관광지 탐방" : "서울 도심 여행";
+    }
+    if (/부산|해운대|광안리|태종대|감천/.test(text)) {
+      return dayNumber === 1 ? "부산 주요 관광지 탐방" : "부산 해안 여행";
+    }
+    if (/경주|불국사|첨성대|황리단길/.test(text)) {
+      return dayNumber === 1 ? "경주 역사문화 탐방" : "경주 여행";
+    }
+    if (/여수|오동도|돌산|향일암/.test(text)) {
+      return dayNumber === 1 ? "여수 주요 관광지 탐방" : "여수 여행";
+    }
+
+    const firstName = names[0];
+    if (firstName) return `${firstName} 중심 여행`;
+    return "여행 일정";
+  }, []);
+
+  const getPrintTime = useCallback((time) => {
+    if (!time) return "";
+    const [h, m] = String(time).split(":").map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return String(time);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }, []);
+
+  const printDays = useMemo(() => {
+    return dayNumbers.map((dayNumber) => {
+      const rawItems = itemsByDay[dayNumber] || [];
+      const schedule = scheduleByDay[dayNumber] || [];
+      const dateValue = getPrintDayDate(dayNumber);
+
+      return {
+        dayNumber,
+        title: getPrintDayTitle(dayNumber, rawItems),
+        date: formatPrintDate(dateValue),
+        weekday: getPrintWeekday(dateValue),
+        items: schedule,
+      };
+    });
+  }, [
+    dayNumbers,
+    itemsByDay,
+    scheduleByDay,
+    getPrintDayDate,
+    getPrintDayTitle,
+    formatPrintDate,
+    getPrintWeekday,
+  ]);
+
+  // A4 한 장에 가능한 만큼 DAY 카드를 배치하되, 일정이 긴 DAY는 단독 페이지로 분리합니다.
+  const printPages = useMemo(() => {
+    const pages = [];
+    let current = [];
+    let estimatedHeight = 150; // 헤더 + 여백
+    const PAGE_LIMIT = 1030;
+
+    printDays.forEach((day) => {
+      const dayHeight = 88 + Math.max(day.items.length, 1) * 62;
+
+      if (current.length > 0 && estimatedHeight + dayHeight > PAGE_LIMIT) {
+        pages.push(current);
+        current = [];
+        estimatedHeight = 150;
+      }
+
+      current.push(day);
+      estimatedHeight += dayHeight + 20;
+    });
+
+    if (current.length > 0) pages.push(current);
+    return pages.length ? pages : [[]];
+  }, [printDays]);
+
+  const exportPageToCanvas = useCallback(async (pageElement) => {
+    if (!pageElement) throw new Error("출력 영역을 찾을 수 없습니다.");
+
+    // 브라우저가 폰트를/레이아웃을 적용한 뒤 캡처하도록 한 프레임 기다립니다.
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+    return html2canvas(pageElement, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#f8fafc",
+      logging: false,
+      imageTimeout: 15000,
+      windowWidth: 794,
+      windowHeight: 1123,
+    });
+  }, []);
+
+  const safeFileName = useCallback((name) => {
+    return (
+      String(name || "travel-plan")
+        .replace(/[\\/:*?"<>|]/g, "-")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 100) || "travel-plan"
+    );
+  }, []);
+
+  const handleExportImage = useCallback(async () => {
+    if (exporting) return;
+    const pages =
+      printContainerRef.current?.querySelectorAll(".travel-print-page");
+    if (!pages?.length) {
+      alert("이미지로 출력할 일정이 없습니다.");
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const baseName = safeFileName(plan?.title || "여행 일정표");
+
+      for (let i = 0; i < pages.length; i += 1) {
+        const canvas = await exportPageToCanvas(pages[i]);
+        const link = document.createElement("a");
+        link.download =
+          pages.length === 1
+            ? `${baseName}.png`
+            : `${baseName}_Page_${i + 1}.png`;
+        link.href = canvas.toDataURL("image/png", 1.0);
+        link.click();
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+    } catch (e) {
+      console.error("이미지 출력 오류:", e);
+      alert("이미지 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, plan?.title, safeFileName, exportPageToCanvas]);
+
+  const handleExportPdf = useCallback(async () => {
+    if (exporting) return;
+    const pages =
+      printContainerRef.current?.querySelectorAll(".travel-print-page");
+    if (!pages?.length) {
+      alert("PDF로 출력할 일정이 없습니다.");
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const baseName = safeFileName(plan?.title || "여행 일정표");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      for (let i = 0; i < pages.length; i += 1) {
+        const canvas = await exportPageToCanvas(pages[i]);
+        const imageData = canvas.toDataURL("image/jpeg", 0.95);
+
+        if (i > 0) pdf.addPage("a4", "portrait");
+        pdf.addImage(imageData, "JPEG", 0, 0, 210, 297, undefined, "FAST");
+      }
+
+      pdf.save(`${baseName}.pdf`);
+    } catch (e) {
+      console.error("PDF 출력 오류:", e);
+      alert("PDF 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, plan?.title, safeFileName, exportPageToCanvas]);
+
+  const handlePrint = useCallback(() => {
+    if (exporting) return;
+    window.print();
+  }, [exporting]);
+
   const handleSave = useCallback(async () => {
     if (isSaving) return;
     if (!editTitle.trim()) {
@@ -884,7 +1159,7 @@ const PlanDetail = () => {
         .travel-detail { width: 100%; max-width: 1500px; margin: 0 auto; padding: 25px 20px 50px; box-sizing: border-box; }
         .travel-detail-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 20px; }
         .travel-detail-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-        .travel-back-button { width: 38px; height: 38px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; display: flex; align-items: center; justifyContent: center; cursor: pointer; flex-shrink: 0; }
+        .travel-back-button { width: 38px; height: 38px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
         .travel-detail-title { margin: 0; font-size: 25px; font-weight: 800; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .travel-detail-title-input { width: min(500px, 100%); font-size: 24px; font-weight: 800; border: 1px solid #d1d5db; border-radius: 7px; padding: 5px 8px; outline: none; }
         .travel-detail-date { display: flex; align-items: center; gap: 8px; margin-top: 5px; color: #6b7280; font-size: 13px; }
@@ -892,7 +1167,7 @@ const PlanDetail = () => {
         .travel-detail-actions { display: flex; gap: 8px; flex-shrink: 0; }
         .travel-detail-grid { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
         .travel-map-wrapper { position: sticky; top: 15px; height: 650px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
-        .travel-map-toolbar { width: 100%; min-height: 54px; padding: 8px 10px; display: flex; align-items: center; justifyContent: space-between; gap: 10px; background: #fff; border-bottom: 1px solid #e5e7eb; flex-shrink: 0; z-index: 10; }
+        .travel-map-toolbar { width: 100%; min-height: 54px; padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border-bottom: 1px solid #e5e7eb; flex-shrink: 0; z-index: 10; }
         .travel-map-toolbar-title { display: flex; align-items: center; gap: 6px; color: #374151; font-size: 13px; font-weight: 800; white-space: nowrap; }
         .travel-map-day-selector { display: flex; align-items: center; gap: 5px; max-width: calc(100% - 90px); overflow-x: auto; scrollbar-width: none; }
         .travel-map-day-selector::-webkit-scrollbar { display: none; }
@@ -910,6 +1185,240 @@ const PlanDetail = () => {
         .travel-day-header.selected { background: #eff6ff; border: 1px solid #bfdbfe; color: #2563eb; }
         .travel-day-header:not(.selected) { background: #f3f4f6; border: 1px solid #e5e7eb; color: #111827; }
         .travel-day-title { font-size: 15px; font-weight: 800; }
+        /* ========================================================
+           A4 출력 템플릿
+           참고 PDF의 TravelMaker 스타일을 유지하면서
+           화면에서는 숨기고 이미지/PDF/인쇄 시에만 사용합니다.
+        ======================================================== */
+        .travel-print-container {
+          position: fixed;
+          left: -100000px;
+          top: 0;
+          width: 794px;
+          z-index: -1;
+          pointer-events: none;
+        }
+        .travel-print-page {
+          width: 794px;
+          min-height: 1123px;
+          box-sizing: border-box;
+          padding: 42px 48px 38px;
+          background: #f8fafc;
+          color: #111827;
+          font-family: Arial, "Noto Sans KR", "Malgun Gothic", sans-serif;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .travel-print-header {
+          position: relative;
+          overflow: hidden;
+          padding: 34px 34px 28px;
+          border-radius: 22px;
+          color: #fff;
+          background: linear-gradient(135deg, #2563eb 0%, #3b82f6 55%, #60a5fa 100%);
+          box-shadow: 0 12px 28px rgba(37, 99, 235, 0.16);
+        }
+        .travel-print-header::after {
+          content: "";
+          position: absolute;
+          width: 180px;
+          height: 180px;
+          right: -55px;
+          top: -75px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.10);
+        }
+        .travel-print-brand {
+          position: relative;
+          z-index: 1;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 5px;
+          opacity: 0.95;
+          margin-bottom: 13px;
+        }
+        .travel-print-main-title {
+          position: relative;
+          z-index: 1;
+          font-size: 30px;
+          line-height: 1.25;
+          font-weight: 900;
+          letter-spacing: -0.8px;
+          word-break: keep-all;
+        }
+        .travel-print-meta {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px 22px;
+          margin-top: 15px;
+          font-size: 12px;
+          font-weight: 600;
+          opacity: 0.96;
+        }
+        .travel-print-days {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          margin-top: 20px;
+          flex: 1;
+        }
+        .travel-print-day-card {
+          overflow: hidden;
+          border: 1px solid #e5e7eb;
+          border-radius: 16px;
+          background: #fff;
+          box-shadow: 0 3px 10px rgba(15, 23, 42, 0.04);
+        }
+        .travel-print-day-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 15px;
+          padding: 14px 18px;
+          background: linear-gradient(90deg, #eff6ff 0%, #f8fafc 100%);
+          border-bottom: 1px solid #e5e7eb;
+        }
+        .travel-print-day-title {
+          min-width: 0;
+          color: #1e40af;
+          font-size: 15px;
+          font-weight: 900;
+          letter-spacing: -0.2px;
+          word-break: keep-all;
+        }
+        .travel-print-day-date {
+          flex-shrink: 0;
+          color: #64748b;
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .travel-print-items {
+          padding: 7px 18px 8px;
+        }
+        .travel-print-item {
+          display: grid;
+          grid-template-columns: 58px minmax(0, 1fr) 72px;
+          align-items: center;
+          gap: 12px;
+          min-height: 56px;
+          padding: 8px 0;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        .travel-print-item:last-child {
+          border-bottom: none;
+        }
+        .travel-print-time {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 28px;
+          padding: 0 7px;
+          border-radius: 7px;
+          background: #dbeafe;
+          color: #1d4ed8;
+          font-size: 11px;
+          font-weight: 900;
+        }
+        .travel-print-place {
+          min-width: 0;
+        }
+        .travel-print-place-name {
+          overflow: hidden;
+          color: #111827;
+          font-size: 13px;
+          line-height: 1.35;
+          font-weight: 800;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .travel-print-address {
+          overflow: hidden;
+          margin-top: 3px;
+          color: #94a3b8;
+          font-size: 10px;
+          line-height: 1.35;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .travel-print-stay {
+          text-align: right;
+          color: #2563eb;
+          font-size: 10px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+        .travel-print-empty {
+          padding: 20px 5px;
+          color: #94a3b8;
+          text-align: center;
+          font-size: 11px;
+        }
+        .travel-print-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: auto;
+          padding-top: 17px;
+          color: #94a3b8;
+          font-size: 9px;
+          font-weight: 700;
+        }
+        .travel-export-buttons {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          flex-wrap: wrap;
+        }
+        .travel-export-button {
+          min-width: 78px;
+        }
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
+          html,
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #f8fafc !important;
+          }
+          body * {
+            visibility: hidden !important;
+          }
+          .travel-print-container,
+          .travel-print-container * {
+            visibility: visible !important;
+          }
+          .travel-detail > :not(.travel-print-container) {
+            display: none !important;
+          }
+          .travel-print-container {
+            position: static !important;
+            left: auto !important;
+            top: auto !important;
+            width: 210mm !important;
+            z-index: auto !important;
+            pointer-events: auto !important;
+          }
+          .travel-print-page {
+            width: 210mm !important;
+            height: 297mm !important;
+            min-height: 297mm !important;
+            page-break-after: always;
+            break-after: page;
+            padding: 12mm 13mm 10mm !important;
+          }
+          .travel-print-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+          }
+        }
+
         @media (max-width: 900px) {
           .travel-detail-grid { grid-template-columns: 1fr; }
           .travel-map-wrapper { position: relative; height: 500px; }
@@ -975,6 +1484,58 @@ const PlanDetail = () => {
         </div>
 
         <div className="travel-detail-actions">
+          {!isEditing && (
+            <div className="travel-export-buttons">
+              <button
+                type="button"
+                className="travel-export-button"
+                onClick={handleExportImage}
+                disabled={exporting}
+                style={{
+                  ...S.btnBase,
+                  border: "1px solid #dbeafe",
+                  background: exporting ? "#f1f5f9" : "#eff6ff",
+                  color: "#1d4ed8",
+                  cursor: exporting ? "default" : "pointer",
+                }}
+              >
+                <Download size={15} />
+                {exporting ? "생성 중..." : "이미지"}
+              </button>
+              <button
+                type="button"
+                className="travel-export-button"
+                onClick={handleExportPdf}
+                disabled={exporting}
+                style={{
+                  ...S.btnBase,
+                  border: "1px solid #dbeafe",
+                  background: exporting ? "#f1f5f9" : "#eff6ff",
+                  color: "#1d4ed8",
+                  cursor: exporting ? "default" : "pointer",
+                }}
+              >
+                <Download size={15} />
+                PDF
+              </button>
+              <button
+                type="button"
+                className="travel-export-button"
+                onClick={handlePrint}
+                disabled={exporting}
+                style={{
+                  ...S.btnBase,
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  color: "#374151",
+                  cursor: exporting ? "default" : "pointer",
+                }}
+              >
+                <Printer size={15} />
+                인쇄
+              </button>
+            </div>
+          )}
           {isEditing ? (
             <>
               <button
@@ -1145,6 +1706,99 @@ const PlanDetail = () => {
               );
             })}
           </div>
+        </div>
+
+        {/* ========================================================
+            A4 출력 전용 DOM
+            화면에서는 화면 왼쪽 바깥에 두고,
+            이미지/PDF/브라우저 인쇄에서 이 DOM을 그대로 사용합니다.
+        ======================================================== */}
+        <div
+          ref={printContainerRef}
+          className="travel-print-container"
+          aria-hidden="true"
+        >
+          {printPages.map((pageDays, pageIndex) => (
+            <div className="travel-print-page" key={`print-page-${pageIndex}`}>
+              <div className="travel-print-header">
+                <div className="travel-print-brand">T R A V E L M A K E R</div>
+                <div className="travel-print-main-title">
+                  {plan?.title || "여행 일정표"}
+                </div>
+                <div className="travel-print-meta">
+                  <span>
+                    📅 기간:{" "}
+                    {formatPrintDate(
+                      isEditing ? editStartDate : plan?.startDate,
+                      true,
+                    )}
+                    {" ~ "}
+                    {formatPrintDate(
+                      isEditing ? editEndDate : plan?.endDate,
+                      true,
+                    )}
+                  </span>
+                  <span>여행자: {getTravelerName()} 님</span>
+                </div>
+              </div>
+
+              <div className="travel-print-days">
+                {pageDays.map((day) => (
+                  <div
+                    className="travel-print-day-card"
+                    key={`print-day-${day.dayNumber}`}
+                  >
+                    <div className="travel-print-day-header">
+                      <div className="travel-print-day-title">
+                        DAY {day.dayNumber} - {day.title}
+                      </div>
+                      <div className="travel-print-day-date">
+                        {day.date} {day.weekday ? `(${day.weekday})` : ""}
+                      </div>
+                    </div>
+
+                    <div className="travel-print-items">
+                      {day.items.length > 0 ? (
+                        day.items.map((scheduleItem, index) => (
+                          <div
+                            className="travel-print-item"
+                            key={`print-item-${day.dayNumber}-${scheduleItem.item?._uiId || index}`}
+                          >
+                            <div className="travel-print-time">
+                              {getPrintTime(scheduleItem.arrivalTime)}
+                            </div>
+                            <div className="travel-print-place">
+                              <div className="travel-print-place-name">
+                                {scheduleItem.item?.placeName || "장소"}
+                              </div>
+                              <div className="travel-print-address">
+                                {scheduleItem.item?.address || "주소 정보 없음"}
+                              </div>
+                            </div>
+                            <div className="travel-print-stay">
+                              체류{" "}
+                              {formatDuration(scheduleItem.item?.stayMinutes)}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="travel-print-empty">
+                          등록된 일정이 없습니다.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="travel-print-footer">
+                <span>TravelMaker - {plan?.title || "여행 일정표"}</span>
+                <span>
+                  Page {pageIndex + 1} / {printPages.length}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
 
         <DragOverlay>
