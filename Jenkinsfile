@@ -7,7 +7,7 @@ pipeline {
         // =================================================
         TARGET_DIR      = '/home/totoro/Reactproject/travel-maker'
         APP_NAME        = 'travel-maker'
-        SERVICE_NAME    = 'travel-maker' // systemd 서비스 이름 (필요시 수정)
+        SERVICE_NAME    = 'travel-maker'
 
         FRONTEND_DIR    = "${WORKSPACE}/frontend"
         STATIC_OUT_DIR  = "${WORKSPACE}/src/main/resources/static"
@@ -141,9 +141,9 @@ pipeline {
         }
 
         // =================================================
-        // 5. Run Spring Boot via systemd
+        // 5. Run Spring Boot via systemd & Health/DB Check
         // =================================================
-        stage('5. Run Backend Application') {
+        stage('5. Run & Verify Application') {
             steps {
                 sh """
                     set -e
@@ -151,13 +151,13 @@ pipeline {
                     echo "==> Restarting Spring Boot Service via systemd"
                     echo "================================================="
 
-                    // jenkins 사용자가 sudo 권한으로 systemctl을 실행할 수 있어야 합니다.
                     sudo systemctl restart ${SERVICE_NAME}
 
-                    echo "==> Waiting for Spring Boot to start..."
+                    echo "==> Waiting for Spring Boot & DB connection..."
                     STARTED=false
 
                     for i in \$(seq 1 30); do
+                        # 기본 포트 응답 체크
                         HTTP_CODE=\$(curl \\
                             -s \\
                             -o /dev/null \\
@@ -172,7 +172,7 @@ pipeline {
                             break
                         fi
 
-                        echo "--> Waiting... \${i}/30"
+                        echo "--> Waiting for server response... \${i}/30"
                         sleep 1
                     done
 
@@ -183,7 +183,21 @@ pipeline {
                     fi
 
                     echo "================================================="
-                    echo "==> Backend Deployment Completed Successfully"
+                    echo "==> Verifying Database Connection via Logs"
+                    echo "================================================="
+                    # systemd 저널 로그에서 DB 연결 관련 에러 키워드가 있는지 검사
+                    # (예: HikariPool, Communications link failure, Access denied 등)
+                    RECENT_LOGS=\$(sudo journalctl -u ${SERVICE_NAME} -n 30 --no-pager)
+
+                    if echo "\$RECENT_LOGS" | grep -E -i "HikariPool.*Exception|Communications link failure|Access denied|Connection refused"; then
+                        echo "ERROR: Database connection error detected in logs!"
+                        exit 1
+                    else
+                        echo "SUCCESS: No database connection errors found in recent logs."
+                    fi
+
+                    echo "================================================="
+                    echo "==> Backend Deployment & DB Check Completed Successfully"
                     echo "================================================="
                 """
             }
@@ -197,7 +211,7 @@ pipeline {
         success {
             echo """
 =================================================
-Successfully deployed ${APP_NAME}!
+Successfully deployed and verified ${APP_NAME}!
 =================================================
 Application : ${APP_NAME}
 Port        : ${APP_PORT}
@@ -209,9 +223,9 @@ Logs Path   : ${TARGET_DIR}/logs/
         failure {
             echo """
 =================================================
-Deployment FAILED for ${APP_NAME}
+Deployment or DB Check FAILED for ${APP_NAME}
 =================================================
-Check Jenkins console logs or error log files.
+Check Jenkins console logs or systemd logs.
 =================================================
 """
         }
