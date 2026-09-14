@@ -9,9 +9,6 @@ pipeline {
         APP_NAME        = 'travel-maker'
 
         FRONTEND_DIR    = "${WORKSPACE}/frontend"
-
-        // Vite 기본 빌드 출력 경로가 ../src/main/resources/static 로 설정되어 있거나 dist인 경우에 맞춤
-        FRONTEND_BUILD_DIR = "${WORKSPACE}/frontend/dist"
         STATIC_OUT_DIR  = "${WORKSPACE}/src/main/resources/static"
 
         // =================================================
@@ -41,7 +38,7 @@ pipeline {
         }
 
         // =================================================
-        // 2. React Frontend Build & Copy to Spring Boot
+        // 2. React Frontend Build (Vite outputs directly to static)
         // =================================================
         stage('2. Build Frontend (React - Vite)') {
             steps {
@@ -72,19 +69,13 @@ pipeline {
                     """
                 }
 
-                // [수정됨] 셸 스크립트 내부 문법 오류를 일으키는 주석 및 괄호 제거
+                // Vite 설정에 의해 static 폴더에 파일이 잘 들어갔는지 검증
                 sh """
                     set -e
                     echo "================================================="
-                    echo "==> Copying React Build to Spring Boot Static Dir"
+                    echo "==> Verifying Spring Boot Static Dir"
                     echo "================================================="
 
-                    mkdir -p "${STATIC_OUT_DIR}"
-
-                    rm -rf "${STATIC_OUT_DIR}/*"
-                    cp -r "${FRONTEND_BUILD_DIR}/." "${STATIC_OUT_DIR}/"
-
-                    echo "==> Copied file list:"
                     ls -lah "${STATIC_OUT_DIR}"
                 """
             }
