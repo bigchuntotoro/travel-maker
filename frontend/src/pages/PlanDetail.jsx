@@ -805,12 +805,21 @@ const PlanDetail = () => {
   // ============================================================
   // 출력용 데이터/포맷 헬퍼
   // ============================================================
+  // 여행자 이름은 API 응답 구조가 조금 달라도 최대한 찾아서 사용합니다.
   const getTravelerName = useCallback(() => {
     const directName =
       plan?.travelerName ||
+      plan?.traveler?.name ||
+      plan?.traveler?.nickname ||
       plan?.userName ||
+      plan?.username ||
       plan?.nickname ||
-      plan?.memberName;
+      plan?.memberName ||
+      plan?.member?.name ||
+      plan?.member?.nickname ||
+      plan?.user?.name ||
+      plan?.user?.nickname ||
+      plan?.user?.username;
 
     if (directName) return String(directName);
 
@@ -818,7 +827,9 @@ const PlanDetail = () => {
       const raw = localStorage.getItem("user");
       if (raw) {
         const user = JSON.parse(raw);
-        return user?.nickname || user?.name || user?.username || "여행자";
+        const localName =
+          user?.nickname || user?.name || user?.username || user?.userName;
+        if (localName) return String(localName);
       }
     } catch {
       // localStorage의 user JSON이 깨져 있어도 출력 기능은 계속 동작합니다.
@@ -826,6 +837,33 @@ const PlanDetail = () => {
 
     return "여행자";
   }, [plan]);
+
+  // 여행 날짜도 백엔드/기존 데이터의 필드명이 달라도 동일하게 출력합니다.
+  const getPlanStartDate = useCallback(() => {
+    return (
+      (isEditing ? editStartDate : null) ||
+      plan?.startDate ||
+      plan?.start_date ||
+      plan?.tripStartDate ||
+      plan?.tripStart ||
+      plan?.departureDate ||
+      plan?.fromDate ||
+      ""
+    );
+  }, [isEditing, editStartDate, plan]);
+
+  const getPlanEndDate = useCallback(() => {
+    return (
+      (isEditing ? editEndDate : null) ||
+      plan?.endDate ||
+      plan?.end_date ||
+      plan?.tripEndDate ||
+      plan?.tripEnd ||
+      plan?.arrivalDate ||
+      plan?.toDate ||
+      ""
+    );
+  }, [isEditing, editEndDate, plan]);
 
   const formatPrintDate = useCallback((value, withYear = false) => {
     if (!value) return "";
@@ -857,7 +895,7 @@ const PlanDetail = () => {
 
   const getPrintDayDate = useCallback(
     (dayNumber) => {
-      const startDate = isEditing ? editStartDate : plan?.startDate;
+      const startDate = getPlanStartDate();
       if (!startDate) return "";
 
       const text = String(startDate).slice(0, 10);
@@ -877,7 +915,7 @@ const PlanDetail = () => {
       const day = String(date.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     },
-    [isEditing, editStartDate, plan?.startDate],
+    [getPlanStartDate],
   );
 
   const getPrintDayTitle = useCallback((dayNumber, dayItems = []) => {
@@ -1835,16 +1873,9 @@ const PlanDetail = () => {
                   </div>
                   <div className="travel-print-meta">
                     <span>
-                      📅 기간:{" "}
-                      {formatPrintDate(
-                        isEditing ? editStartDate : plan?.startDate,
-                        true,
-                      )}
+                      📅 기간: {formatPrintDate(getPlanStartDate(), true)}
                       {" ~ "}
-                      {formatPrintDate(
-                        isEditing ? editEndDate : plan?.endDate,
-                        true,
-                      )}
+                      {formatPrintDate(getPlanEndDate(), true)}
                     </span>
                     <span>여행자: {getTravelerName()} 님</span>
                   </div>
@@ -2012,16 +2043,9 @@ const PlanDetail = () => {
                         </div>
                         <div className="travel-print-meta">
                           <span>
-                            📅 기간:{" "}
-                            {formatPrintDate(
-                              isEditing ? editStartDate : plan?.startDate,
-                              true,
-                            )}
+                            📅 기간: {formatPrintDate(getPlanStartDate(), true)}
                             {" ~ "}
-                            {formatPrintDate(
-                              isEditing ? editEndDate : plan?.endDate,
-                              true,
-                            )}
+                            {formatPrintDate(getPlanEndDate(), true)}
                           </span>
                           <span>여행자: {getTravelerName()} 님</span>
                         </div>
