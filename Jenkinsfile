@@ -10,9 +10,7 @@ pipeline {
 
         FRONTEND_DIR    = "${WORKSPACE}/frontend"
 
-        // Vite/React build 결과물이 임시로 위치하거나 복사될 경로
-        // 보통 Vite 기본 빌드 결과물(dist 등)을 Spring static 폴더로 복사해야 합니다.
-        // 프론트 빌드 output이 'dist'라면 아래와 같이 활용됩니다.
+        // Vite 기본 빌드 출력 경로가 ../src/main/resources/static 로 설정되어 있거나 dist인 경우에 맞춤
         FRONTEND_BUILD_DIR = "${WORKSPACE}/frontend/dist"
         STATIC_OUT_DIR  = "${WORKSPACE}/src/main/resources/static"
 
@@ -74,7 +72,7 @@ pipeline {
                     """
                 }
 
-                // React 빌드 결과물을 Spring Boot의 static 폴더로 복사 (통합 JAR 생성용)
+                // [수정됨] 셸 스크립트 내부 문법 오류를 일으키는 주석 및 괄호 제거
                 sh """
                     set -e
                     echo "================================================="
@@ -83,7 +81,6 @@ pipeline {
 
                     mkdir -p "${STATIC_OUT_DIR}"
 
-                    // 기존 static 내용 정리 후 복사 (dist 기준, 프론트 설정에 따라 build 등으로 바뀔 수 있음)
                     rm -rf "${STATIC_OUT_DIR}/*"
                     cp -r "${FRONTEND_BUILD_DIR}/." "${STATIC_OUT_DIR}/"
 
@@ -163,11 +160,9 @@ pipeline {
                     echo "==> Starting Spring Boot Application"
                     echo "================================================="
 
-                    // 기존 프로세스 안전 종료
                     pkill -f '${env.APP_NAME}.*\\.jar' || true
                     sleep 2
 
-                    // 백그라운드 실행 및 로그 분리 저장 (backend-out.log / backend-error.log)
                     cd "${TARGET_DIR}"
                     nohup java -jar "${APP_NAME}.jar" > logs/backend-out.log 2> logs/backend-error.log &
 
