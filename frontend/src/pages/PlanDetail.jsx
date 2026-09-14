@@ -13,6 +13,7 @@ import {
   Clock3,
   CloudSun,
   Download,
+  Eye,
   GripVertical,
   Printer,
   MapPin,
@@ -426,6 +427,8 @@ const PlanDetail = () => {
   // ============================================================
   const printContainerRef = useRef(null);
   const [exporting, setExporting] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPageIndex, setPreviewPageIndex] = useState(0);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1068,6 +1071,38 @@ const PlanDetail = () => {
     window.print();
   }, [exporting]);
 
+  const handleOpenPreview = useCallback(() => {
+    if (exporting) return;
+    setPreviewPageIndex(0);
+    setPreviewOpen(true);
+  }, [exporting]);
+
+  const handleClosePreview = useCallback(() => {
+    setPreviewOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!previewOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setPreviewOpen(false);
+      if (event.key === "ArrowLeft") {
+        setPreviewPageIndex((prev) => Math.max(0, prev - 1));
+      }
+      if (event.key === "ArrowRight") {
+        setPreviewPageIndex((prev) =>
+          Math.min(Math.max(printPages.length - 1, 0), prev + 1),
+        );
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [previewOpen, printPages.length]);
+
   const handleSave = useCallback(async () => {
     if (isSaving) return;
     if (!editTitle.trim()) {
@@ -1164,7 +1199,26 @@ const PlanDetail = () => {
         .travel-detail-title-input { width: min(500px, 100%); font-size: 24px; font-weight: 800; border: 1px solid #d1d5db; border-radius: 7px; padding: 5px 8px; outline: none; }
         .travel-detail-date { display: flex; align-items: center; gap: 8px; margin-top: 5px; color: #6b7280; font-size: 13px; }
         .travel-detail-date input { max-width: 145px; border: 1px solid #d1d5db; border-radius: 6px; padding: 5px 7px; }
-        .travel-detail-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .travel-detail-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+        .travel-export-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+        .travel-preview-backdrop { position: fixed; inset: 0; z-index: 99999; background: rgba(15, 23, 42, 0.72); display: flex; flex-direction: column; }
+        .travel-preview-toolbar { min-height: 58px; padding: 10px 16px; box-sizing: border-box; background: #ffffff; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #e5e7eb; flex-shrink: 0; }
+        .travel-preview-toolbar-left, .travel-preview-toolbar-right { display: flex; align-items: center; gap: 8px; }
+        .travel-preview-title { font-size: 14px; font-weight: 800; color: #111827; }
+        .travel-preview-page-count { font-size: 12px; color: #6b7280; }
+        .travel-preview-nav-button { width: 34px; height: 34px; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #374151; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .travel-preview-nav-button:disabled { opacity: .4; cursor: default; }
+        .travel-preview-close { border: 1px solid #d1d5db; border-radius: 7px; padding: 8px 12px; background: #fff; cursor: pointer; font-weight: 700; color: #374151; }
+        .travel-preview-content { flex: 1; overflow: auto; padding: 24px; box-sizing: border-box; display: flex; justify-content: center; align-items: flex-start; }
+        .travel-preview-sheet { width: 794px; min-width: 794px; transform-origin: top center; box-shadow: 0 12px 40px rgba(0,0,0,.28); }
+        .travel-preview-sheet .travel-print-page { position: relative !important; left: auto !important; top: auto !important; width: 794px !important; height: 1123px !important; min-height: 1123px !important; margin: 0 !important; box-sizing: border-box !important; }
+        .travel-preview-sheet .travel-print-page:last-child { page-break-after: auto !important; }
+        @media (max-width: 768px) {
+          .travel-preview-content { padding: 12px; }
+          .travel-preview-sheet { transform: scale(calc((100vw - 24px) / 794)); margin-bottom: calc(-1123px * (1 - min(1, ((100vw - 24px) / 794)))); }
+          .travel-preview-toolbar { padding: 8px 10px; }
+          .travel-preview-title { font-size: 13px; }
+        }
         .travel-detail-grid { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
         .travel-map-wrapper { position: sticky; top: 15px; height: 650px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
         .travel-map-toolbar { width: 100%; min-height: 54px; padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border-bottom: 1px solid #e5e7eb; flex-shrink: 0; z-index: 10; }
@@ -1488,6 +1542,22 @@ const PlanDetail = () => {
             <div className="travel-export-buttons">
               <button
                 type="button"
+                className="travel-export-button preview-button"
+                onClick={handleOpenPreview}
+                disabled={exporting}
+                style={{
+                  ...S.btnBase,
+                  border: "1px solid #dbeafe",
+                  background: exporting ? "#f1f5f9" : "#eff6ff",
+                  color: "#1d4ed8",
+                  cursor: exporting ? "default" : "pointer",
+                }}
+              >
+                <Eye size={15} />
+                미리보기
+              </button>
+              <button
+                type="button"
                 className="travel-export-button"
                 onClick={handleExportImage}
                 disabled={exporting}
@@ -1800,6 +1870,153 @@ const PlanDetail = () => {
             </div>
           ))}
         </div>
+
+        {previewOpen && (
+          <div
+            className="travel-preview-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="여행 일정표 미리보기"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) handleClosePreview();
+            }}
+          >
+            <div className="travel-preview-toolbar">
+              <div className="travel-preview-toolbar-left">
+                <Eye size={17} color="#2563eb" />
+                <span className="travel-preview-title">
+                  여행 일정표 미리보기
+                </span>
+                <span className="travel-preview-page-count">
+                  {previewPageIndex + 1} / {printPages.length} 페이지
+                </span>
+              </div>
+              <div className="travel-preview-toolbar-right">
+                <button
+                  type="button"
+                  className="travel-preview-nav-button"
+                  onClick={() =>
+                    setPreviewPageIndex((prev) => Math.max(0, prev - 1))
+                  }
+                  disabled={previewPageIndex === 0}
+                  aria-label="이전 페이지"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="travel-preview-nav-button"
+                  onClick={() =>
+                    setPreviewPageIndex((prev) =>
+                      Math.min(Math.max(printPages.length - 1, 0), prev + 1),
+                    )
+                  }
+                  disabled={previewPageIndex >= printPages.length - 1}
+                  aria-label="다음 페이지"
+                >
+                  ›
+                </button>
+                <button
+                  type="button"
+                  className="travel-preview-close"
+                  onClick={handleClosePreview}
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+
+            <div className="travel-preview-content">
+              <div className="travel-preview-sheet">
+                {printPages[previewPageIndex] && (
+                  <div className="travel-print-page">
+                    <div className="travel-print-header">
+                      <div className="travel-print-brand">
+                        T R A V E L M A K E R
+                      </div>
+                      <div className="travel-print-main-title">
+                        {plan?.title || "여행 일정표"}
+                      </div>
+                      <div className="travel-print-meta">
+                        <span>
+                          📅 기간:{" "}
+                          {formatPrintDate(
+                            isEditing ? editStartDate : plan?.startDate,
+                            true,
+                          )}
+                          {" ~ "}
+                          {formatPrintDate(
+                            isEditing ? editEndDate : plan?.endDate,
+                            true,
+                          )}
+                        </span>
+                        <span>여행자: {getTravelerName()} 님</span>
+                      </div>
+                    </div>
+
+                    <div className="travel-print-days">
+                      {printPages[previewPageIndex].map((day) => (
+                        <div
+                          className="travel-print-day-card"
+                          key={`preview-day-${day.dayNumber}`}
+                        >
+                          <div className="travel-print-day-header">
+                            <div className="travel-print-day-title">
+                              DAY {day.dayNumber} - {day.title}
+                            </div>
+                            <div className="travel-print-day-date">
+                              {day.date} {day.weekday ? `(${day.weekday})` : ""}
+                            </div>
+                          </div>
+                          <div className="travel-print-items">
+                            {day.items.length > 0 ? (
+                              day.items.map((scheduleItem, index) => (
+                                <div
+                                  className="travel-print-item"
+                                  key={`preview-item-${day.dayNumber}-${scheduleItem.item?._uiId || index}`}
+                                >
+                                  <div className="travel-print-time">
+                                    {getPrintTime(scheduleItem.arrivalTime)}
+                                  </div>
+                                  <div className="travel-print-place">
+                                    <div className="travel-print-place-name">
+                                      {scheduleItem.item?.placeName || "장소"}
+                                    </div>
+                                    <div className="travel-print-address">
+                                      {scheduleItem.item?.address ||
+                                        "주소 정보 없음"}
+                                    </div>
+                                  </div>
+                                  <div className="travel-print-stay">
+                                    체류{" "}
+                                    {formatDuration(
+                                      scheduleItem.item?.stayMinutes,
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="travel-print-empty">
+                                등록된 일정이 없습니다.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="travel-print-footer">
+                      <span>TravelMaker - {plan?.title || "여행 일정표"}</span>
+                      <span>
+                        Page {previewPageIndex + 1} / {printPages.length}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <DragOverlay>
           {activeDragItem && (
