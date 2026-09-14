@@ -7,6 +7,7 @@ pipeline {
         // =================================================
         TARGET_DIR      = '/home/totoro/Reactproject/travel-maker'
         APP_NAME        = 'travel-maker'
+        SERVICE_NAME    = 'travel-maker' // systemd 서비스 이름 (필요시 수정)
 
         FRONTEND_DIR    = "${WORKSPACE}/frontend"
         STATIC_OUT_DIR  = "${WORKSPACE}/src/main/resources/static"
@@ -69,7 +70,6 @@ pipeline {
                     """
                 }
 
-                // Vite 설정에 의해 static 폴더에 파일이 잘 들어갔는지 검증
                 sh """
                     set -e
                     echo "================================================="
@@ -141,21 +141,18 @@ pipeline {
         }
 
         // =================================================
-        // 5. Run Spring Boot (Log & Background)
+        // 5. Run Spring Boot via systemd
         // =================================================
         stage('5. Run Backend Application') {
             steps {
                 sh """
                     set -e
                     echo "================================================="
-                    echo "==> Starting Spring Boot Application"
+                    echo "==> Restarting Spring Boot Service via systemd"
                     echo "================================================="
 
-                    pkill -f '${env.APP_NAME}.*\\.jar' || true
-                    sleep 2
-
-                    cd "${TARGET_DIR}"
-                    nohup java -jar "${APP_NAME}.jar" > logs/backend-out.log 2> logs/backend-error.log &
+                    // jenkins 사용자가 sudo 권한으로 systemctl을 실행할 수 있어야 합니다.
+                    sudo systemctl restart ${SERVICE_NAME}
 
                     echo "==> Waiting for Spring Boot to start..."
                     STARTED=false
@@ -180,8 +177,8 @@ pipeline {
                     done
 
                     if [ "\$STARTED" != "true" ]; then
-                        echo "ERROR: Spring Boot failed to start. Checking logs..."
-                        tail -n 50 "${TARGET_DIR}/logs/backend-error.log" || true
+                        echo "ERROR: Spring Boot failed to start. Checking systemd logs..."
+                        sudo journalctl -u ${SERVICE_NAME} -n 50 --no-pager || true
                         exit 1
                     fi
 
