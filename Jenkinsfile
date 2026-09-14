@@ -32,6 +32,7 @@ pipeline {
             steps {
                 // Git 저장소 소스 코드 체크아웃
                 checkout scm
+                sh 'chmod +x gradlew'
             }
         }
 
