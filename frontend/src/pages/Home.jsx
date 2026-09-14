@@ -5,7 +5,9 @@ import React, {
   useCallback,
   useRef,
 } from "react";
+
 import { useNavigate } from "react-router-dom";
+
 import { createPlan } from "../api/travelApi";
 import KakaoMap from "../components/map/KakaoMap";
 
@@ -39,6 +41,7 @@ import {
 } from "@dnd-kit/sortable";
 
 import { CSS } from "@dnd-kit/utilities";
+
 import axiosInstance from "../api/axiosInstance";
 
 /* =========================================================
@@ -119,7 +122,6 @@ const normalizeItems = (items = []) =>
 
       longitude: toNumber(item.longitude),
     }))
-
     .sort((a, b) => a.dayNumber - b.dayNumber || a.visitOrder - b.visitOrder);
 
 /**
@@ -191,6 +193,7 @@ const formatDuration = (mins, isSec = false) => {
   }
 
   const hours = Math.floor(minutes / 60);
+
   const remain = minutes % 60;
 
   return remain === 0 ? `${hours}시간` : `${hours}시간 ${remain}분`;
@@ -257,6 +260,7 @@ const SortablePlanItem = ({
 
   const style = {
     transform: CSS.Transform.toString(transform),
+
     transition,
 
     opacity: isDragging ? 0.4 : 1,
@@ -289,6 +293,7 @@ const SortablePlanItem = ({
         }}
       >
         {/* Drag 버튼 */}
+
         <button
           type="button"
           {...attributes}
@@ -299,15 +304,23 @@ const SortablePlanItem = ({
             width: 28,
             height: 28,
             minWidth: 28,
+
             borderRadius: "50%",
+
             border: "none",
+
             background: "#eff6ff",
+
             color: "#2563eb",
+
             cursor: "grab",
+
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+
             flexShrink: 0,
+
             touchAction: "none",
           }}
         >
@@ -315,19 +328,27 @@ const SortablePlanItem = ({
         </button>
 
         {/* 순번 */}
+
         <div
           style={{
             width: 28,
             height: 28,
             minWidth: 28,
+
             borderRadius: "50%",
+
             background: "#2563eb",
+
             color: "#fff",
+
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+
             fontWeight: 800,
+
             fontSize: 13,
+
             flexShrink: 0,
           }}
         >
@@ -335,6 +356,7 @@ const SortablePlanItem = ({
         </div>
 
         {/* 내용 */}
+
         <div
           style={{
             flex: 1,
@@ -342,15 +364,21 @@ const SortablePlanItem = ({
           }}
         >
           {/* 장소명 */}
+
           <div
             style={{
               fontSize: 15,
+
               fontWeight: 700,
+
               color: "#111827",
+
               marginBottom: 4,
 
               overflow: "hidden",
+
               textOverflow: "ellipsis",
+
               whiteSpace: "nowrap",
             }}
           >
@@ -358,15 +386,23 @@ const SortablePlanItem = ({
           </div>
 
           {/* 주소 */}
+
           <div
             style={{
               display: "flex",
+
               alignItems: "flex-start",
+
               gap: 5,
+
               color: "#6b7280",
+
               fontSize: 12,
+
               marginBottom: 5,
+
               lineHeight: 1.4,
+
               minWidth: 0,
             }}
           >
@@ -381,8 +417,11 @@ const SortablePlanItem = ({
             <span
               style={{
                 overflow: "hidden",
+
                 textOverflow: "ellipsis",
+
                 whiteSpace: "nowrap",
+
                 minWidth: 0,
               }}
             >
@@ -391,13 +430,19 @@ const SortablePlanItem = ({
           </div>
 
           {/* 시간 */}
+
           <div
             style={{
               display: "flex",
+
               alignItems: "center",
+
               flexWrap: "wrap",
+
               gap: 6,
+
               fontSize: 11,
+
               lineHeight: 1.5,
             }}
           >
@@ -405,6 +450,7 @@ const SortablePlanItem = ({
               <span
                 style={{
                   color: "#2563eb",
+
                   fontWeight: 700,
                 }}
               >
@@ -442,16 +488,24 @@ const SortablePlanItem = ({
           </div>
 
           {/* 이동 경로 */}
+
           {routeSection && (
             <div
               style={{
                 display: "flex",
+
                 alignItems: "center",
+
                 flexWrap: "wrap",
+
                 gap: 5,
+
                 marginTop: 5,
+
                 color: "#059669",
+
                 fontSize: 11,
+
                 fontWeight: 600,
               }}
             >
@@ -474,11 +528,15 @@ const SortablePlanItem = ({
           )}
 
           {/* 체류시간 / 삭제 */}
+
           <div
             style={{
               display: "flex",
+
               alignItems: "center",
+
               gap: 6,
+
               marginTop: 8,
             }}
             onClick={(e) => e.stopPropagation()}
@@ -490,10 +548,15 @@ const SortablePlanItem = ({
               onChange={(e) => onStayChange(item._uiId, Number(e.target.value))}
               style={{
                 border: "1px solid #d1d5db",
+
                 borderRadius: 6,
+
                 padding: "4px 6px",
+
                 fontSize: 11,
+
                 background: "#fff",
+
                 maxWidth: "calc(100% - 45px)",
               }}
             >
@@ -510,11 +573,17 @@ const SortablePlanItem = ({
               aria-label="장소 삭제"
               style={{
                 marginLeft: "auto",
+
                 border: "none",
+
                 background: "transparent",
+
                 color: "#ef4444",
+
                 cursor: "pointer",
+
                 padding: 5,
+
                 flexShrink: 0,
               }}
             >
@@ -556,11 +625,17 @@ const DayDropContainer = ({
       onClick={() => onDaySelect?.(dayNumber)}
       style={{
         border,
+
         borderRadius: 12,
+
         padding: 10,
+
         background,
+
         transition: "all 0.15s ease",
+
         cursor: "pointer",
+
         minWidth: 0,
       }}
     >
@@ -572,15 +647,25 @@ const DayDropContainer = ({
         <div
           style={{
             minHeight: 70,
+
             display: "flex",
+
             alignItems: "center",
+
             justifyContent: "center",
+
             textAlign: "center",
+
             color: "#9ca3af",
+
             fontSize: 12,
+
             border: "1px dashed #d1d5db",
+
             borderRadius: 8,
+
             background: "#fff",
+
             padding: 12,
           }}
         >
@@ -600,6 +685,10 @@ const DayDropContainer = ({
 const Home = () => {
   const navigate = useNavigate();
 
+  /* =======================================================
+     사용자
+  ======================================================= */
+
   const user = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem("user") || "{}");
@@ -608,9 +697,9 @@ const Home = () => {
     }
   }, []);
 
-  /* -------------------------------------------------------
+  /* =======================================================
      기본 상태
-  ------------------------------------------------------- */
+  ======================================================= */
 
   const [title, setTitle] = useState("");
 
@@ -622,9 +711,9 @@ const Home = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  /* -------------------------------------------------------
+  /* =======================================================
      지도 / 경로
-  ------------------------------------------------------- */
+  ======================================================= */
 
   const [routePathsByDay, setRoutePathsByDay] = useState({});
 
@@ -636,23 +725,23 @@ const Home = () => {
 
   const [selectedPlaceForMap, setSelectedPlaceForMap] = useState(null);
 
-  /* -------------------------------------------------------
+  /* =======================================================
      DnD
-  ------------------------------------------------------- */
+  ======================================================= */
 
   const [activeDragId, setActiveDragId] = useState(null);
 
-  /* -------------------------------------------------------
+  /* =======================================================
      날씨
-  ------------------------------------------------------- */
+  ======================================================= */
 
   const [weatherInfo, setWeatherInfo] = useState(null);
 
   const [weatherLoading, setWeatherLoading] = useState(false);
 
-  /* -------------------------------------------------------
+  /* =======================================================
      DnD 센서
-  ------------------------------------------------------- */
+  ======================================================= */
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -672,6 +761,7 @@ const Home = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("user");
+
     navigate("/login");
   };
 
@@ -679,8 +769,8 @@ const Home = () => {
      날짜
   ======================================================= */
 
-  const handleStartDateChange = (e) => {
-    const newStartDate = e.target.value;
+  const handleStartDateChange = (event) => {
+    const newStartDate = event.target.value;
 
     setStartDate(newStartDate);
 
@@ -726,6 +816,8 @@ const Home = () => {
   useEffect(() => {
     if (!dayNumbers.includes(selectedDayForMap)) {
       setSelectedDayForMap(dayNumbers[0] || 1);
+
+      setSelectedPlaceForMap(null);
     }
   }, [dayNumbers, selectedDayForMap]);
 
@@ -784,76 +876,97 @@ const Home = () => {
 
     const grouped = groupItemsByDay(currentItems);
 
-    try {
-      const days = Object.keys(grouped)
-        .map(Number)
-        .sort((a, b) => a - b);
+    const days = Object.keys(grouped)
+      .map(Number)
+      .sort((a, b) => a - b);
 
-      const newSections = [];
-      const newPaths = {};
+    const newSections = [];
 
-      for (const dayNumber of days) {
-        if (requestId !== routeRequestIdRef.current) {
-          return;
-        }
+    const newPaths = {};
 
-        const dayItems = grouped[dayNumber] || [];
+    if (days.length === 0) {
+      setRouteSections([]);
 
-        if (dayItems.length <= 1) {
-          newPaths[dayNumber] = [];
+      setRoutePathsByDay({});
 
-          continue;
-        }
+      return;
+    }
 
-        const first = dayItems[0];
+    for (const dayNumber of days) {
+      if (requestId !== routeRequestIdRef.current) {
+        return;
+      }
 
-        const last = dayItems[dayItems.length - 1];
+      const dayItems = grouped[dayNumber] || [];
 
-        if (
-          !Number.isFinite(Number(first.latitude)) ||
-          !Number.isFinite(Number(first.longitude)) ||
-          !Number.isFinite(Number(last.latitude)) ||
-          !Number.isFinite(Number(last.longitude))
-        ) {
-          newPaths[dayNumber] = [];
+      /* 장소가 0~1개면 경로 불필요 */
 
-          continue;
-        }
+      if (dayItems.length <= 1) {
+        newPaths[dayNumber] = [];
 
-        const origin = {
-          name: first.placeName || "출발지",
+        continue;
+      }
 
-          x: Number(first.longitude),
+      const first = dayItems[0];
 
-          y: Number(first.latitude),
-        };
+      const last = dayItems[dayItems.length - 1];
 
-        const destination = {
-          name: last.placeName || "도착지",
+      const firstLat = Number(first.latitude);
 
-          x: Number(last.longitude),
+      const firstLng = Number(first.longitude);
 
-          y: Number(last.latitude),
-        };
+      const lastLat = Number(last.latitude);
 
-        const waypoints = dayItems
-          .slice(1, -1)
-          .filter(
-            (item) =>
-              Number.isFinite(Number(item.latitude)) &&
-              Number.isFinite(Number(item.longitude)),
-          )
-          .map((item) => ({
-            name: item.placeName || "경유지",
+      const lastLng = Number(last.longitude);
 
-            x: Number(item.longitude),
+      if (
+        !Number.isFinite(firstLat) ||
+        !Number.isFinite(firstLng) ||
+        !Number.isFinite(lastLat) ||
+        !Number.isFinite(lastLng)
+      ) {
+        newPaths[dayNumber] = [];
 
-            y: Number(item.latitude),
-          }));
+        continue;
+      }
 
+      const origin = {
+        name: first.placeName || "출발지",
+
+        x: firstLng,
+
+        y: firstLat,
+      };
+
+      const destination = {
+        name: last.placeName || "도착지",
+
+        x: lastLng,
+
+        y: lastLat,
+      };
+
+      const waypoints = dayItems
+        .slice(1, -1)
+        .filter(
+          (item) =>
+            Number.isFinite(Number(item.latitude)) &&
+            Number.isFinite(Number(item.longitude)),
+        )
+        .map((item) => ({
+          name: item.placeName || "경유지",
+
+          x: Number(item.longitude),
+
+          y: Number(item.latitude),
+        }));
+
+      try {
         const response = await axiosInstance.post("/api/plans/route", {
           origin,
+
           destination,
+
           waypoints,
 
           priority: "RECOMMEND",
@@ -906,25 +1019,20 @@ const Home = () => {
             distance: Number(section.distance || 0),
           });
         });
+      } catch (error) {
+        console.error(`DAY ${dayNumber} 경로 조회 실패:`, error);
+
+        newPaths[dayNumber] = [];
       }
-
-      if (requestId !== routeRequestIdRef.current) {
-        return;
-      }
-
-      setRouteSections(newSections);
-
-      setRoutePathsByDay(newPaths);
-    } catch (error) {
-      console.error("도로 경로 조회 실패:", error);
-
-      if (requestId !== routeRequestIdRef.current) {
-        return;
-      }
-
-      setRouteSections([]);
-      setRoutePathsByDay({});
     }
+
+    if (requestId !== routeRequestIdRef.current) {
+      return;
+    }
+
+    setRouteSections(newSections);
+
+    setRoutePathsByDay(newPaths);
   }, []);
 
   /* =======================================================
@@ -946,6 +1054,7 @@ const Home = () => {
   const fetchWeatherForSelectedDay = useCallback(async (dayItems) => {
     if (!dayItems || dayItems.length === 0) {
       setWeatherInfo(null);
+
       return;
     }
 
@@ -956,6 +1065,7 @@ const Home = () => {
       !Number.isFinite(Number(targetPlace.longitude))
     ) {
       setWeatherInfo(null);
+
       return;
     }
 
@@ -963,12 +1073,14 @@ const Home = () => {
       setWeatherLoading(true);
 
       /*
-       * 현재는 테스트용 날씨 정보입니다.
-       * 추후 OpenWeather / 기상청 API 연결 가능
+       * 현재 테스트용 날씨 정보
        */
+
       setWeatherInfo({
         temperature: "22°C",
+
         description: "맑음",
+
         locationName: targetPlace.placeName || "해당 지역",
       });
     } catch (error) {
@@ -986,6 +1098,11 @@ const Home = () => {
 
   /* =======================================================
      DAY 선택
+     
+     중요:
+     DAY를 클릭했을 때 특정 장소로 이동하지 않고
+     selectedPlaceForMap을 null로 만들어
+     KakaoMap이 해당 DAY 전체를 보여주도록 함
   ======================================================= */
 
   const handleDaySelect = (dayNumber) => {
@@ -993,17 +1110,15 @@ const Home = () => {
 
     setSelectedDayForMap(day);
 
-    const first = itemsByDay[day]?.[0];
-
-    if (first) {
-      setSelectedPlaceForMap({
-        lat: Number(first.latitude),
-
-        lng: Number(first.longitude),
-
-        placeName: first.placeName,
-      });
-    }
+    /*
+     * 기존에는 첫 번째 장소로
+     * 지도 중심을 이동시켰음.
+     *
+     * 이제는 null로 초기화하여
+     * 해당 DAY 전체 장소가 지도에
+     * 표시되도록 함.
+     */
+    setSelectedPlaceForMap(null);
   };
 
   /* =======================================================
@@ -1027,6 +1142,7 @@ const Home = () => {
      * 주소가 없는 경우
      * Kakao Geocoder 사용
      */
+
     if (!placeInfo.address && window.kakao?.maps?.services) {
       const geocoder = new window.kakao.maps.services.Geocoder();
 
@@ -1042,15 +1158,20 @@ const Home = () => {
 
         addPlaceItem({
           ...placeInfo,
+
           latitude: lat,
+
           longitude: lng,
+
           address,
         });
       });
     } else {
       addPlaceItem({
         ...placeInfo,
+
         latitude: lat,
+
         longitude: lng,
       });
     }
@@ -1061,6 +1182,36 @@ const Home = () => {
   ======================================================= */
 
   const addPlaceItem = (placeInfo) => {
+    const lat = Number(placeInfo.latitude);
+
+    const lng = Number(placeInfo.longitude);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return;
+    }
+
+    /*
+     * 동일한 장소 중복 추가 방지
+     */
+
+    const duplicate = selectedDayItems.some(
+      (item) =>
+        Math.abs(Number(item.latitude) - lat) < 0.000001 &&
+        Math.abs(Number(item.longitude) - lng) < 0.000001,
+    );
+
+    if (duplicate) {
+      setSelectedPlaceForMap({
+        lat,
+
+        lng,
+
+        placeName: placeInfo.placeName || placeInfo.title || "선택된 장소",
+      });
+
+      return;
+    }
+
     const newItem = {
       _uiId: createUiId(),
 
@@ -1070,9 +1221,9 @@ const Home = () => {
 
       address: placeInfo.address || "",
 
-      latitude: Number(placeInfo.latitude),
+      latitude: lat,
 
-      longitude: Number(placeInfo.longitude),
+      longitude: lng,
 
       visitOrder: selectedDayItems.length + 1,
 
@@ -1081,10 +1232,15 @@ const Home = () => {
 
     setItems((prev) => normalizeVisitOrders([...prev, newItem]));
 
-    setSelectedPlaceForMap({
-      lat: Number(placeInfo.latitude),
+    /*
+     * 새 장소를 추가했을 때는
+     * 새 장소 중심으로 이동
+     */
 
-      lng: Number(placeInfo.longitude),
+    setSelectedPlaceForMap({
+      lat,
+
+      lng,
 
       placeName: newItem.placeName,
     });
@@ -1099,7 +1255,7 @@ const Home = () => {
       normalizeVisitOrders(prev.filter((item) => item._uiId !== uiId)),
     );
 
-    if (selectedPlaceForMap && selectedPlaceForMap.uiId === uiId) {
+    if (selectedPlaceForMap?.uiId === uiId) {
       setSelectedPlaceForMap(null);
     }
   };
@@ -1114,6 +1270,7 @@ const Home = () => {
         item._uiId === uiId
           ? {
               ...item,
+
               stayMinutes: minutes,
             }
           : item,
@@ -1174,14 +1331,25 @@ const Home = () => {
       if (overId.startsWith("day-")) {
         const targetDay = Number(overId.replace("day-", ""));
 
+        /*
+         * 같은 DAY 빈 영역에 놓은 경우
+         * 순서만 유지
+         */
+
+        if (Number(activeItem.dayNumber) === targetDay) {
+          return prev;
+        }
+
         const remaining = current.filter(
           (item) => String(item._uiId) !== activeId,
         );
 
         return normalizeVisitOrders([
           ...remaining,
+
           {
             ...activeItem,
+
             dayNumber: targetDay,
           },
         ]);
@@ -1217,6 +1385,7 @@ const Home = () => {
 
       remaining.splice(targetIndex, 0, {
         ...activeItem,
+
         dayNumber: targetDay,
       });
 
@@ -1276,21 +1445,25 @@ const Home = () => {
   const handleSubmitPlan = async () => {
     if (!title.trim()) {
       alert("여행 제목을 입력해 주세요.");
+
       return;
     }
 
     if (!startDate || !endDate) {
       alert("여행 기간을 설정해 주세요.");
+
       return;
     }
 
     if (startDate > endDate) {
       alert("여행 종료일은 시작일보다 빠를 수 없습니다.");
+
       return;
     }
 
     if (items.length === 0) {
       alert("최소 하나 이상의 장소를 추가해 주세요.");
+
       return;
     }
 
@@ -1298,8 +1471,17 @@ const Home = () => {
       alert("로그인 정보가 없습니다.");
 
       navigate("/login");
+
       return;
     }
+
+    /*
+     * UI 전용 _uiId 제거
+     */
+
+    const normalized = normalizeVisitOrders(items);
+
+    const cleanItems = normalized.map(({ _uiId, ...item }) => item);
 
     const payload = {
       userId: user.userId,
@@ -1310,7 +1492,7 @@ const Home = () => {
 
       endDate,
 
-      items: normalizeVisitOrders(items),
+      items: cleanItems,
     };
 
     try {
@@ -1318,7 +1500,11 @@ const Home = () => {
 
       const response = await createPlan(payload);
 
-      alert(`성공적으로 저장되었습니다! (Plan ID: ${response.planId})`);
+      const planId = response?.planId ?? response?.data?.planId;
+
+      alert(
+        `성공적으로 저장되었습니다!${planId ? ` (Plan ID: ${planId})` : ""}`,
+      );
 
       navigate("/plans");
     } catch (error) {
@@ -1356,6 +1542,15 @@ const Home = () => {
             box-sizing: border-box;
           }
 
+          html,
+          body,
+          #root {
+            width: 100%;
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+          }
+
           .travel-home {
             width: 100%;
             max-width: 1500px;
@@ -1363,13 +1558,21 @@ const Home = () => {
             padding: 25px 20px 50px;
           }
 
+          /* ================================================
+             Header
+          ================================================ */
+
           .travel-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 15px;
+
             margin-bottom: 20px;
-            border-bottom: 1px solid #e5e7eb;
+
+            border-bottom:
+              1px solid #e5e7eb;
+
             padding-bottom: 15px;
           }
 
@@ -1380,11 +1583,18 @@ const Home = () => {
             flex-wrap: wrap;
           }
 
+          /* ================================================
+             기본 정보
+          ================================================ */
+
           .travel-basic-info {
             display: flex;
             align-items: center;
+
             gap: 15px;
+
             margin-bottom: 20px;
+
             padding: 16px;
           }
 
@@ -1396,8 +1606,12 @@ const Home = () => {
           .travel-date-area {
             display: flex;
             align-items: center;
+
             gap: 8px;
+
             flex: 1.5;
+
+            min-width: 0;
           }
 
           .travel-date-input {
@@ -1405,56 +1619,153 @@ const Home = () => {
             width: 100%;
           }
 
+          /* ================================================
+             메인
+          ================================================ */
+
           .travel-main-grid {
             display: grid;
+
             grid-template-columns:
               minmax(0, 1.85fr)
               minmax(320px, 1fr);
+
             gap: 20px;
+
             align-items: start;
           }
 
+          /* ================================================
+             지도 전체 카드
+          ================================================ */
+
           .travel-map-wrapper {
             position: sticky;
-            top: 15px;
-            height: 680px;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            background: #fff;
-            overflow: hidden;
-          }
 
-          .travel-map-day-selector {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            z-index: 350;
+            top: 15px;
+
+            height: 680px;
+
+            border:
+              1px solid #e5e7eb;
+
+            border-radius: 12px;
+
+            background: #fff;
+
+            overflow: hidden;
 
             display: flex;
+
+            flex-direction: column;
+          }
+
+          /* ================================================
+             ★ 지도 상단 DAY 툴바
+             
+             기존처럼 지도 위에 겹치지 않음
+          ================================================ */
+
+          .travel-map-toolbar {
+            width: 100%;
+
+            min-height: 52px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            gap: 10px;
+
+            padding: 8px 10px;
+
+            background: #fff;
+
+            border-bottom:
+              1px solid #e5e7eb;
+
+            flex-shrink: 0;
+
+            z-index: 10;
+          }
+
+          .travel-map-toolbar-title {
+            display: flex;
+
+            align-items: center;
+
+            gap: 6px;
+
+            font-size: 13px;
+
+            font-weight: 700;
+
+            color: #374151;
+
+            white-space: nowrap;
+
+            flex-shrink: 0;
+          }
+
+          /* ================================================
+             DAY 버튼
+          ================================================ */
+
+          .travel-map-day-selector {
+            display: flex;
+
+            align-items: center;
+
             gap: 5px;
 
-            max-width: calc(100% - 24px);
-
-            padding: 5px;
-            border-radius: 9px;
-
-            background:
-              rgba(255,255,255,0.96);
-
-            box-shadow:
-              0 2px 8px
-              rgba(0,0,0,0.15);
+            max-width:
+              calc(100% - 90px);
 
             overflow-x: auto;
-            scrollbar-width: thin;
+
+            overflow-y: hidden;
+
+            padding: 2px;
+
+            scrollbar-width: none;
+
+            -webkit-overflow-scrolling:
+              touch;
+          }
+
+          .travel-map-day-selector::-webkit-scrollbar {
+            display: none;
           }
 
           .travel-map-day-selector button {
             flex-shrink: 0;
           }
 
+          /* ================================================
+             실제 지도 영역
+          ================================================ */
+
+          .travel-map-content {
+            position: relative;
+
+            flex: 1;
+
+            min-height: 0;
+
+            width: 100%;
+
+            overflow: hidden;
+          }
+
+          /* ================================================
+             날씨
+          ================================================ */
+
           .travel-weather {
             margin-bottom: 16px;
+
             padding: 12px 16px;
 
             background:
@@ -1464,18 +1775,25 @@ const Home = () => {
                 #dbeafe 100%
               );
 
-            border: 1px solid #bfdbfe;
+            border:
+              1px solid #bfdbfe;
+
             border-radius: 12px;
 
             display: flex;
+
             align-items: center;
+
             justify-content: space-between;
           }
 
           .travel-weather-content {
             display: flex;
+
             align-items: center;
+
             gap: 10px;
+
             min-width: 0;
           }
 
@@ -1483,13 +1801,19 @@ const Home = () => {
             min-width: 0;
           }
 
+          /* ================================================
+             DAY 일정
+          ================================================ */
+
           .travel-day-section {
             margin-bottom: 14px;
           }
 
           .travel-day-header {
             display: flex;
+
             align-items: center;
+
             justify-content: space-between;
 
             padding: 11px 13px;
@@ -1500,15 +1824,17 @@ const Home = () => {
             cursor: pointer;
           }
 
-          .travel-mobile-break {
-            display: none;
-          }
+          /* ================================================
+             1000px
+          ================================================ */
 
           @media (max-width: 1000px) {
+
             .travel-main-grid {
               grid-template-columns:
                 minmax(0, 1.45fr)
                 minmax(280px, 1fr);
+
               gap: 15px;
             }
 
@@ -1529,7 +1855,12 @@ const Home = () => {
             }
           }
 
+          /* ================================================
+             768px 이하
+          ================================================ */
+
           @media (max-width: 768px) {
+
             .travel-home {
               padding:
                 12px
@@ -1537,20 +1868,31 @@ const Home = () => {
                 30px;
             }
 
+            /* Header */
+
             .travel-header {
-              align-items: flex-start;
-              flex-direction: column;
+              align-items:
+                flex-start;
+
+              flex-direction:
+                column;
+
               padding-bottom: 12px;
+
               gap: 12px;
             }
 
             .travel-header h1 {
-              font-size: 20px !important;
-              line-height: 1.3;
+              font-size:
+                20px !important;
+
+              line-height:
+                1.3;
             }
 
             .travel-header-actions {
               width: 100%;
+
               gap: 6px;
             }
 
@@ -1560,35 +1902,50 @@ const Home = () => {
 
             .travel-header-actions span {
               width: 100%;
-              font-size: 13px !important;
+
+              font-size:
+                13px !important;
             }
 
+            /* 기본 정보 */
+
             .travel-basic-info {
-              flex-direction: column;
-              align-items: stretch;
+              flex-direction:
+                column;
+
+              align-items:
+                stretch;
+
               gap: 10px;
+
               padding: 12px;
             }
 
             .travel-title-input {
               width: 100%;
+
               flex: none;
             }
 
             .travel-date-area {
               width: 100%;
+
               flex: none;
+
               display: grid;
+
               grid-template-columns:
                 20px
                 minmax(0, 1fr)
                 15px
                 minmax(0, 1fr);
+
               gap: 6px;
             }
 
             .travel-date-input {
               width: 100%;
+
               min-width: 0;
             }
 
@@ -1596,34 +1953,87 @@ const Home = () => {
               width: 100%;
             }
 
+            /* 메인 */
+
             .travel-main-grid {
-              grid-template-columns: 1fr;
+              grid-template-columns:
+                1fr;
+
               gap: 14px;
             }
 
+            /* ============================================
+               지도
+            ============================================ */
+
             .travel-map-wrapper {
               position: relative;
+
               top: auto;
+
               width: 100%;
-              height: 400px;
-              min-height: 400px;
+
+              height: 430px;
+
+              min-height: 430px;
+
+              border-radius: 10px;
             }
 
-            .travel-map-day-selector {
-              left: 10px;
-              right: 10px;
-              top: 10px;
-              max-width: none;
-              justify-content: flex-start;
+            /* 지도 툴바 */
+
+            .travel-map-toolbar {
+              min-height: 48px;
+
+              padding:
+                7px 8px;
+
+              gap: 6px;
             }
+
+            .travel-map-toolbar-title {
+              font-size: 12px;
+            }
+
+            /* DAY 버튼 */
+
+            .travel-map-day-selector {
+              max-width:
+                calc(100% - 75px);
+
+              gap: 4px;
+            }
+
+            .travel-map-day-selector button {
+              padding:
+                6px 9px !important;
+
+              font-size:
+                11px !important;
+            }
+
+            /* 지도 */
+
+            .travel-map-content {
+              flex: 1;
+
+              min-height: 0;
+
+              width: 100%;
+            }
+
+            /* 날씨 */
 
             .travel-weather {
               margin-bottom: 12px;
-              padding: 10px 12px;
+
+              padding:
+                10px 12px;
             }
 
             .travel-weather-content {
-              align-items: flex-start;
+              align-items:
+                flex-start;
             }
 
             .travel-weather-text {
@@ -1632,24 +2042,32 @@ const Home = () => {
 
             .travel-weather-text > div:last-child {
               white-space: nowrap;
+
               overflow: hidden;
-              text-overflow: ellipsis;
+
+              text-overflow:
+                ellipsis;
             }
 
+            /* 일정 */
+
             .travel-day-header {
-              padding: 10px 11px;
+              padding:
+                10px 11px;
             }
 
             .travel-day-section {
-              margin-bottom: 10px;
-            }
-
-            .travel-mobile-break {
-              display: block;
+              margin-bottom:
+                10px;
             }
           }
 
+          /* ================================================
+             480px 이하
+          ================================================ */
+
           @media (max-width: 480px) {
+
             .travel-home {
               padding:
                 8px
@@ -1658,11 +2076,13 @@ const Home = () => {
             }
 
             .travel-header h1 {
-              font-size: 18px !important;
+              font-size:
+                18px !important;
             }
 
             .travel-header-actions {
               display: grid;
+
               grid-template-columns:
                 1fr
                 1fr;
@@ -1673,39 +2093,62 @@ const Home = () => {
                 1 / -1;
             }
 
+            /* 지도 */
+
             .travel-map-wrapper {
-              height: 360px;
-              min-height: 360px;
-              border-radius: 10px;
+              height: 390px;
+
+              min-height: 390px;
+
+              border-radius: 9px;
+            }
+
+            .travel-map-toolbar {
+              min-height: 45px;
+
+              padding:
+                6px 7px;
+            }
+
+            .travel-map-toolbar-title {
+              font-size: 11px;
             }
 
             .travel-map-day-selector {
-              top: 7px;
-              left: 7px;
-              right: 7px;
+              max-width:
+                calc(100% - 65px);
             }
 
             .travel-map-day-selector button {
               padding:
-                6px
-                9px;
-              font-size: 11px;
+                5px 8px !important;
+
+              font-size:
+                10px !important;
             }
 
+            /* 날씨 */
+
             .travel-weather {
-              padding: 9px 10px;
+              padding:
+                9px 10px;
             }
 
             .travel-weather-text > div:first-child {
-              font-size: 12px !important;
+              font-size:
+                12px !important;
             }
 
             .travel-weather-text > div:last-child {
-              font-size: 11px !important;
+              font-size:
+                11px !important;
             }
 
+            /* 일정 */
+
             .travel-day-header {
-              font-size: 13px;
+              font-size:
+                13px;
             }
           }
         `}
@@ -1720,15 +2163,20 @@ const Home = () => {
           <div
             style={{
               display: "flex",
+
               alignItems: "center",
+
               gap: 10,
             }}
           >
             <h1
               style={{
                 fontSize: 24,
+
                 fontWeight: 800,
+
                 color: "#111827",
+
                 margin: 0,
               }}
             >
@@ -1742,7 +2190,9 @@ const Home = () => {
               onClick={() => navigate("/plans")}
               style={{
                 ...S.btnBase,
+
                 border: "1px solid #d1d5db",
+
                 background: "#fff",
               }}
             >
@@ -1752,7 +2202,9 @@ const Home = () => {
             <span
               style={{
                 fontSize: 14,
+
                 fontWeight: 600,
+
                 color: "#374151",
               }}
             >
@@ -1764,7 +2216,9 @@ const Home = () => {
               onClick={handleLogout}
               style={{
                 ...S.btnBase,
+
                 border: "1px solid #d1d5db",
+
                 background: "#f3f4f6",
               }}
             >
@@ -1791,9 +2245,13 @@ const Home = () => {
             onChange={(e) => setTitle(e.target.value)}
             style={{
               padding: "10px 14px",
+
               border: "1px solid #d1d5db",
+
               borderRadius: 8,
+
               fontSize: 14,
+
               outline: "none",
             }}
           />
@@ -1808,7 +2266,9 @@ const Home = () => {
               onChange={handleStartDateChange}
               style={{
                 padding: "9px 10px",
+
                 border: "1px solid #d1d5db",
+
                 borderRadius: 8,
               }}
             />
@@ -1830,7 +2290,9 @@ const Home = () => {
               disabled={!startDate}
               style={{
                 padding: "9px 10px",
+
                 border: "1px solid #d1d5db",
+
                 borderRadius: 8,
               }}
             />
@@ -1879,40 +2341,65 @@ const Home = () => {
             ============================================= */}
 
             <div className="travel-map-wrapper">
-              {/* DAY 선택 */}
-              <div className="travel-map-day-selector">
-                {dayNumbers.map((dayNumber) => (
-                  <button
-                    key={dayNumber}
-                    type="button"
-                    onClick={() => handleDaySelect(dayNumber)}
-                    style={{
-                      border: "none",
-                      borderRadius: 7,
-                      padding: "7px 10px",
+              {/* ==========================================
+                  ★ 지도 위가 아닌 별도 DAY 툴바
+              ========================================== */}
 
-                      background:
-                        selectedDayForMap === dayNumber ? "#2563eb" : "#f3f4f6",
+              <div className="travel-map-toolbar">
+                <div className="travel-map-toolbar-title">
+                  <MapPin size={15} />
 
-                      color:
-                        selectedDayForMap === dayNumber ? "#fff" : "#374151",
+                  <span>여행 지도</span>
+                </div>
 
-                      fontWeight: 700,
-                      fontSize: 12,
-                      cursor: "pointer",
-                    }}
-                  >
-                    DAY {dayNumber}
-                  </button>
-                ))}
+                <div className="travel-map-day-selector">
+                  {dayNumbers.map((dayNumber) => (
+                    <button
+                      key={dayNumber}
+                      type="button"
+                      onClick={() => handleDaySelect(dayNumber)}
+                      style={{
+                        border: "none",
+
+                        borderRadius: 7,
+
+                        padding: "7px 11px",
+
+                        background:
+                          selectedDayForMap === dayNumber
+                            ? "#2563eb"
+                            : "#f3f4f6",
+
+                        color:
+                          selectedDayForMap === dayNumber ? "#fff" : "#374151",
+
+                        fontWeight: 700,
+
+                        fontSize: 12,
+
+                        cursor: "pointer",
+
+                        flexShrink: 0,
+                      }}
+                    >
+                      DAY {dayNumber}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <KakaoMap
-                items={selectedDayItems}
-                selectedPlaceForMap={selectedPlaceForMap}
-                onPlaceSelect={handlePlaceSelectFromMap}
-                routePath={selectedRoutePath}
-              />
+              {/* ==========================================
+                  실제 Kakao 지도
+              ========================================== */}
+
+              <div className="travel-map-content">
+                <KakaoMap
+                  items={selectedDayItems}
+                  selectedPlaceForMap={selectedPlaceForMap}
+                  onPlaceSelect={handlePlaceSelectFromMap}
+                  routePath={selectedRoutePath}
+                />
+              </div>
             </div>
 
             {/* =============================================
@@ -1921,18 +2408,27 @@ const Home = () => {
 
             <div>
               {/* 날씨 */}
+
               <div className="travel-weather">
                 <div className="travel-weather-content">
                   <div
                     style={{
                       width: 36,
+
                       height: 36,
+
                       minWidth: 36,
+
                       borderRadius: "50%",
+
                       background: "#2563eb",
+
                       color: "#fff",
+
                       display: "flex",
+
                       alignItems: "center",
+
                       justifyContent: "center",
                     }}
                   >
@@ -1943,7 +2439,9 @@ const Home = () => {
                     <div
                       style={{
                         fontSize: 13,
+
                         fontWeight: 700,
+
                         color: "#1e40af",
                       }}
                     >
@@ -1953,7 +2451,9 @@ const Home = () => {
                     <div
                       style={{
                         fontSize: 12,
+
                         color: "#4b5563",
+
                         marginTop: 2,
                       }}
                     >
@@ -1968,6 +2468,7 @@ const Home = () => {
               </div>
 
               {/* DAY 목록 */}
+
               {dayNumbers.map((dayNumber) => {
                 const dayItems = itemsByDay[dayNumber] || [];
 
@@ -1976,6 +2477,7 @@ const Home = () => {
                 return (
                   <div key={dayNumber} className="travel-day-section">
                     {/* DAY Header */}
+
                     <div
                       className="travel-day-header"
                       onClick={() => handleDaySelect(dayNumber)}
@@ -1994,7 +2496,9 @@ const Home = () => {
                       <div
                         style={{
                           fontSize: 15,
+
                           fontWeight: 800,
+
                           color:
                             selectedDayForMap === dayNumber
                               ? "#2563eb"
@@ -2006,6 +2510,7 @@ const Home = () => {
                     </div>
 
                     {/* Drop 영역 */}
+
                     <DayDropContainer
                       dayNumber={dayNumber}
                       itemIds={dayItems.map((item) => item._uiId)}
@@ -2020,6 +2525,11 @@ const Home = () => {
                           onRemove={handleRemoveItem}
                           onStayChange={handleStayChange}
                           onSelect={(item) => {
+                            /*
+                             * 장소를 직접 선택했을 때만
+                             * 지도 중심 이동
+                             */
+
                             setSelectedDayForMap(Number(item.dayNumber || 1));
 
                             setSelectedPlaceForMap({
@@ -2051,17 +2561,24 @@ const Home = () => {
               <div
                 style={{
                   width: "min(330px, 80vw)",
+
                   background: "#fff",
+
                   border: "2px solid #2563eb",
+
                   borderRadius: 10,
+
                   padding: "12px 14px",
+
                   boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
                 }}
               >
                 <div
                   style={{
                     display: "flex",
+
                     alignItems: "center",
+
                     gap: 8,
                   }}
                 >
