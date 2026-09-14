@@ -1553,6 +1553,16 @@ const PlanDetail = () => {
           .travel-print-container * {
             visibility: visible !important;
           }
+          .travel-detail {
+            width: 210mm !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+            display: block !important;
+            min-height: 0 !important;
+            height: auto !important;
+          }
           .travel-detail > :not(.travel-print-container) {
             display: none !important;
           }
@@ -1561,8 +1571,13 @@ const PlanDetail = () => {
             left: auto !important;
             top: auto !important;
             width: 210mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
             z-index: auto !important;
             pointer-events: auto !important;
+            display: block !important;
           }
           .travel-print-page {
             width: 210mm !important;
