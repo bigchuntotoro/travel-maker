@@ -36,7 +36,6 @@ const PlanList = () => {
     try {
       setLoading(true);
       setError("");
-      // 백엔드 API 호출 (유저 ID 기준 목록 조회 또는 전체 내 일정 목록 조회)
       const res = await axiosInstance.get(`/api/plans?userId=${user.userId}`);
       setPlans(res.data || []);
     } catch (err) {
@@ -51,13 +50,13 @@ const PlanList = () => {
     fetchPlans();
   }, [fetchPlans]);
 
-  // ✏️ 수정: 상세 페이지로 이동 (해당 페이지에서 '편집' 버튼으로 바로 진입하도록 플래그 전달)
+  // ✏️ 수정: 상세 페이지로 이동
   const handleEditPlan = (e, plan) => {
     e.stopPropagation();
     navigate(`/plans/${plan.planId}`, { state: { autoEdit: true } });
   };
 
-  // 📋 복사: 기존 일정을 그대로 불러와 제목만 바꿔 새 일정으로 저장 (createPlan 재사용)
+  // 📋 복사: 기존 일정을 그대로 불러와 제목만 바꿔 새 일정으로 저장
   const handleCopyPlan = async (e, plan) => {
     e.stopPropagation();
     if (copyingId || deletingId) return;
@@ -65,7 +64,6 @@ const PlanList = () => {
 
     try {
       setCopyingId(plan.planId);
-      // 목록 응답에 items가 없을 수 있으므로 상세 조회로 전체 데이터를 가져온다.
       const detailRes = await axiosInstance.get(`/api/plans/${plan.planId}`);
       const source = detailRes.data || plan;
 
@@ -96,16 +94,28 @@ const PlanList = () => {
     }
   };
 
-  // 🗑 삭제: 목록에서 바로 삭제
+  // 🗑 삭제: 물어보고 입력/확인 후 삭제
   const handleDeletePlan = async (e, plan) => {
     e.stopPropagation();
     if (copyingId || deletingId) return;
-    if (!window.confirm(`"${plan.title}" 일정을 삭제하시겠습니까?`)) return;
+
+    // prompt를 통해 사용자에게 "삭제" 입력을 요구 (원하는 문구로 변경 가능)
+    const userInput = window.prompt(
+      `"${plan.title}" 일정을 정말로 삭제하시겠습니까?\n삭제를 진행하려면 창에 "삭제"를 입력해주세요.`,
+    );
+
+    // 취소를 눌렀거나 입력값이 "삭제"가 아닌 경우 중단
+    if (userInput === null) return;
+    if (userInput.trim() !== "삭제") {
+      alert("입력한 내용이 일치하지 않아 삭제가 취소되었습니다.");
+      return;
+    }
 
     try {
       setDeletingId(plan.planId);
       await axiosInstance.delete(`/api/plans/${plan.planId}`);
       setPlans((prev) => prev.filter((p) => p.planId !== plan.planId));
+      alert("일정이 성공적으로 삭제되었습니다.");
     } catch (err) {
       console.error("일정 삭제 실패:", err);
       alert("일정 삭제에 실패했습니다.");
@@ -115,9 +125,6 @@ const PlanList = () => {
   };
 
   // 🔗 공유: 상세 페이지 링크를 클립보드에 복사
-  // ⚠️ 별도의 '공유용 읽기 전용' 백엔드 API가 없는 상태라, 우선은 현재 상세 페이지 URL을
-  //    복사해주는 수준으로 구현했습니다. 로그인하지 않은 사용자와 안전하게 공유하려면
-  //    서버에 공유 토큰 발급 API가 추가로 필요합니다.
   const handleSharePlan = async (e, plan) => {
     e.stopPropagation();
     const shareUrl = `${window.location.origin}/plans/${plan.planId}`;
@@ -343,7 +350,7 @@ const PlanList = () => {
                   <span>상세보기 ➔</span>
                 </div>
 
-                {/* 수정 / 복사 / 삭제 / 공유 */}
+                {/* 수정 / 복사 / 공유 / 삭제 */}
                 <div
                   style={{
                     display: "flex",
