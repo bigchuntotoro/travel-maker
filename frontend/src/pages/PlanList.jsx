@@ -98,18 +98,13 @@ const PlanList = () => {
     }
   };
 
-  // 🗑 삭제: 물어보고 입력/확인 후 삭제
+  // 🗑 삭제: 확인 창(confirm)을 띄워 물어본 후 삭제
   const handleDeletePlan = async (e, plan) => {
     e.stopPropagation();
     if (copyingId || deletingId) return;
 
-    const userInput = window.prompt(
-      `"${plan.title}" 일정을 정말로 삭제하시겠습니까?\n삭제를 진행하려면 창에 "삭제"를 입력해주세요.`,
-    );
-
-    if (userInput === null) return;
-    if (userInput.trim() !== "삭제") {
-      alert("입력한 내용이 일치하지 않아 삭제가 취소되었습니다.");
+    // 💡 window.prompt 대신 window.confirm을 사용하여 확인/취소 형태로 변경
+    if (!window.confirm(`"${plan.title}" 일정을 정말로 삭제하시겠습니까?`)) {
       return;
     }
 
