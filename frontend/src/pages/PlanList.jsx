@@ -20,6 +20,10 @@ const PlanList = () => {
   const [copyingId, setCopyingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [sharingId, setSharingId] = useState(null);
+  const [isReordering, setIsReordering] = useState(false); // 순서 저장 중 로딩 표시
+
+  // 드래그 앤 드롭을 위한 상태
+  const [draggedIndex, setDraggedIndex] = useState(null);
 
   // 로그아웃 처리
   const handleLogout = () => {
@@ -99,12 +103,10 @@ const PlanList = () => {
     e.stopPropagation();
     if (copyingId || deletingId) return;
 
-    // prompt를 통해 사용자에게 "삭제" 입력을 요구 (원하는 문구로 변경 가능)
     const userInput = window.prompt(
       `"${plan.title}" 일정을 정말로 삭제하시겠습니까?\n삭제를 진행하려면 창에 "삭제"를 입력해주세요.`,
     );
 
-    // 취소를 눌렀거나 입력값이 "삭제"가 아닌 경우 중단
     if (userInput === null) return;
     if (userInput.trim() !== "삭제") {
       alert("입력한 내용이 일치하지 않아 삭제가 취소되었습니다.");
@@ -145,6 +147,53 @@ const PlanList = () => {
     } finally {
       setSharingId(null);
     }
+  };
+
+  // --- 드래그 앤 드롭 및 서버 저장 핸들러 ---
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = async (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    // 1. 프론트엔드 상태 즉시 변경 (낙관적 업데이트)
+    const updatedPlans = [...plans];
+    const [movedItem] = updatedPlans.splice(draggedIndex, 1);
+    updatedPlans.splice(targetIndex, 0, movedItem);
+
+    setPlans(updatedPlans);
+    setDraggedIndex(null);
+
+    // 2. 백엔드 서버에 변경된 순서(planId 목록) 전송하여 저장
+    try {
+      setIsReordering(true);
+      const planIds = updatedPlans.map((p) => p.planId);
+
+      // 백엔드 순서 변경 API 경로 (상황에 맞게 수정 필요)
+      await axiosInstance.patch("/api/plans/reorder", {
+        userId: user.userId,
+        planIds,
+      });
+    } catch (err) {
+      console.error("일정 순서 저장 실패:", err);
+      alert("일정 순서 변경을 서버에 저장하는 데 실패했습니다.");
+      // 실패 시 원래 목록으로 복구하려면 fetchPlans() 재호출
+      fetchPlans();
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
   };
 
   const cardActionButtonStyle = (color) => ({
@@ -208,9 +257,20 @@ const PlanList = () => {
           marginBottom: "20px",
         }}
       >
-        <h2 style={{ fontSize: "18px", fontWeight: "bold", color: "#1f2937" }}>
-          📋 저장된 일정 목록 ({plans.length})
-        </h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <h2
+            style={{ fontSize: "18px", fontWeight: "bold", color: "#1f2937" }}
+          >
+            📋 저장된 일정 목록 ({plans.length})
+          </h2>
+          {isReordering && (
+            <span
+              style={{ fontSize: "12px", color: "#2563eb", fontWeight: "600" }}
+            >
+              순서 저장 중...
+            </span>
+          )}
+        </div>
         <button
           onClick={() => navigate("/create-plan")}
           style={{
@@ -228,6 +288,14 @@ const PlanList = () => {
           ➕ 새 일정 만들기
         </button>
       </div>
+
+      {/* 안내 문구 추가 */}
+      {plans.length > 0 && (
+        <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "16px" }}>
+          💡 카드를 마우스로 드래그하여 원하는 순서로 변경할 수 있습니다. (자동
+          저장)
+        </p>
+      )}
 
       {/* 일정 카드 목록 영역 */}
       {loading ? (
@@ -281,7 +349,7 @@ const PlanList = () => {
             gap: "20px",
           }}
         >
-          {plans.map((plan) => {
+          {plans.map((plan, index) => {
             const isBusy =
               copyingId === plan.planId ||
               deletingId === plan.planId ||
@@ -290,14 +358,21 @@ const PlanList = () => {
             return (
               <div
                 key={plan.planId}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
                 onClick={() => navigate(`/plans/${plan.planId}`)}
                 style={{
                   backgroundColor: "#ffffff",
                   borderRadius: "12px",
                   border: "1px solid #e5e7eb",
                   padding: "20px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease-in-out",
+                  cursor: "grab",
+                  opacity: draggedIndex === index ? 0.4 : 1,
+                  transition:
+                    "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
                 }}
                 onMouseEnter={(e) => {
@@ -311,19 +386,39 @@ const PlanList = () => {
                     "0 1px 3px rgba(0,0,0,0.05)";
                 }}
               >
-                <h3
+                <div
                   style={{
-                    fontSize: "18px",
-                    fontWeight: "bold",
-                    color: "#111827",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
                     marginBottom: "8px",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
                   }}
                 >
-                  {plan.title}
-                </h3>
+                  <h3
+                    style={{
+                      fontSize: "18px",
+                      fontWeight: "bold",
+                      color: "#111827",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      flex: 1,
+                    }}
+                  >
+                    {plan.title}
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: "16px",
+                      color: "#9ca3af",
+                      cursor: "grab",
+                      marginLeft: "8px",
+                    }}
+                    title="드래그하여 순서 변경"
+                  >
+                    ☰
+                  </span>
+                </div>
                 <p
                   style={{
                     fontSize: "14px",

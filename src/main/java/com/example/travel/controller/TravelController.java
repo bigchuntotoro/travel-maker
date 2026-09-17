@@ -303,4 +303,30 @@ public class TravelController {
 
         return ResponseEntity.ok(response);
     }
+
+    // =========================================================
+    // 여행 일정 순서 변경 (정렬 순서 저장)
+    // =========================================================
+
+    /**
+     * PATCH /api/plans/reorder
+     */
+    @PatchMapping("/reorder")
+    public ResponseEntity<Map<String, String>> updatePlanOrder(
+            @RequestBody Map<String, Object> request
+    ) {
+        // 프론트에서 보낸 데이터 파싱 (userId와 정렬된 planId 배열)
+        Long userId = Long.valueOf(request.get("userId").toString());
+        List<Long> planIds = ((List<?>) request.get("planIds")).stream()
+                .map(id -> Long.valueOf(id.toString()))
+                .toList();
+
+        // 서비스 계층을 통해 순서 업데이트 로직 수행
+        travelService.updatePlanOrder(userId, planIds);
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "일정 순서가 성공적으로 변경되었습니다.");
+
+        return ResponseEntity.ok(response);
+    }
 }

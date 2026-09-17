@@ -213,4 +213,25 @@ public class TravelService {
             );
         }
     }
+
+    /**
+     * 여행 일정 순서 변경 및 저장
+     */
+    @Transactional
+    public void updatePlanOrder(Long userId, List<Long> planIds) {
+        // 반복문을 돌며 전달받은 배열의 순서(index)대로 DB의 순서 값 업데이트
+        for (int i = 0; i < planIds.size(); i++) {
+            Long planId = planIds.get(i);
+
+            // 1. 해당 일정이 실제로 존재하는지, 혹은 요청한 유저의 것인지 검증 (선택 사항)
+            PlanResponseDto plan = travelMapper.selectPlanById(planId);
+            if (plan == null) {
+                throw new IllegalArgumentException("존재하지 않는 일정입니다. ID: " + planId);
+            }
+
+            // 2. MyBatis를 통해 sort_order (또는 순서 컬럼) 업데이트 호출
+            // i + 1을 해주어 1부터 순서가 시작되도록 지정
+            travelMapper.updatePlanOrder(planId, i + 1);
+        }
+    }
 }

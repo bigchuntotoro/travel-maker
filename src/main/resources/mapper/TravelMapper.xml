@@ -4,182 +4,59 @@
 
 <mapper namespace="com.example.travel.mapper.TravelMapper">
 
-
-    <!-- =========================================================
-         1. 여행 플랜 마스터 저장
-         ========================================================= -->
-    <insert id="insertPlan"
-            parameterType="com.example.travel.dto.CreatePlanRequest"
-            useGeneratedKeys="true"
-            keyProperty="planId">
-
-        INSERT INTO travel_plans (
-        user_id,
-        title,
-        start_date,
-        end_date
-        )
-        VALUES (
-        #{userId},
-        #{title},
-        #{startDate},
-        #{endDate}
-        )
-
+    <insert id="insertPlan" parameterType="com.example.travel.dto.CreatePlanRequest"
+            useGeneratedKeys="true" keyProperty="planId">
+        INSERT INTO travel_plans (user_id, title, start_date, end_date)
+        VALUES (#{userId}, #{title}, #{startDate}, #{endDate})
     </insert>
 
-
-    <!-- =========================================================
-         2. 일자별 상세 경로 일괄 저장 (address 추가)
-         ========================================================= -->
     <insert id="insertPlanItems">
-
-        INSERT INTO plan_items (
-        plan_id,
-        day_number,
-        place_name,
-        address,        <!-- 🔥 [추가] -->
-        latitude,
-        longitude,
-        visit_order,
-        memo,
-        stay_minutes
-        )
+        INSERT INTO plan_items (plan_id, day_number, place_name, address, latitude, longitude, visit_order, memo, stay_minutes)
         VALUES
-
-        <foreach collection="items"
-                 item="item"
-                 separator=",">
-
-            (
-            #{item.planId},
-            #{item.dayNumber},
-            #{item.placeName},
-            #{item.address},  <!-- 🔥 [추가] -->
-            #{item.latitude},
-            #{item.longitude},
-            #{item.visitOrder},
-            #{item.memo},
-            #{item.stayMinutes}
-            )
-
+        <foreach collection="items" item="item" separator=",">
+            (#{item.planId}, #{item.dayNumber}, #{item.placeName}, #{item.address}, #{item.latitude}, #{item.longitude}, #{item.visitOrder}, #{item.memo}, #{item.stayMinutes})
         </foreach>
-
     </insert>
 
-
-    <!-- =========================================================
-         3. 여행 플랜 기본 정보 조회
-         ========================================================= -->
-    <select id="selectPlanById"
-            resultType="com.example.travel.dto.PlanResponseDto">
-
-        SELECT
-        plan_id AS planId,
-        user_id AS userId,
-        title,
-        start_date AS startDate,
-        end_date AS endDate
-
+    <select id="selectPlanById" resultType="com.example.travel.dto.PlanResponseDto">
+        SELECT plan_id AS planId, user_id AS userId, title, start_date AS startDate, end_date AS endDate
         FROM travel_plans
-
         WHERE plan_id = #{planId}
-
     </select>
 
-
-    <!-- =========================================================
-         4. 일자별 상세 경로 조회 (address 매핑 추가)
-         ========================================================= -->
-    <select id="selectPlanItemsByPlanId"
-            resultType="com.example.travel.dto.PlanItemDto">
-
-        SELECT
-        item_id AS itemId,
-        plan_id AS planId,
-        day_number AS dayNumber,
-        place_name AS placeName,
-        address AS address,   <!-- 🔥 [추가] -->
-        latitude,
-        longitude,
-        visit_order AS visitOrder,
-        memo,
-
-        -- 체류시간(분)
-        stay_minutes AS stayMinutes
-
+    <select id="selectPlanItemsByPlanId" resultType="com.example.travel.dto.PlanItemDto">
+        SELECT item_id AS itemId, plan_id AS planId, day_number AS dayNumber, place_name AS placeName,
+        address AS address, latitude, longitude, visit_order AS visitOrder, memo, stay_minutes AS stayMinutes
         FROM plan_items
-
         WHERE plan_id = #{planId}
-
-        ORDER BY
-        day_number ASC,
-        visit_order ASC
-
+        ORDER BY day_number ASC, visit_order ASC
     </select>
 
-
-    <!-- =========================================================
-         5. 특정 유저의 전체 여행 플랜 목록 조회
-         ========================================================= -->
-    <select id="selectPlansByUserId"
-            resultType="com.example.travel.dto.PlanResponseDto">
-
-        SELECT
-        plan_id AS planId,
-        user_id AS userId,
-        title,
-        start_date AS startDate,
-        end_date AS endDate
-
+    <select id="selectPlansByUserId" resultType="com.example.travel.dto.PlanResponseDto">
+        SELECT plan_id AS planId, user_id AS userId, title, start_date AS startDate, end_date AS endDate
         FROM travel_plans
-
         WHERE user_id = #{userId}
-
-        ORDER BY plan_id DESC
-
+        ORDER BY sort_order ASC, plan_id DESC
     </select>
 
-
-    <!-- =========================================================
-         6. 여행 플랜 기본 정보 수정
-         ========================================================= -->
     <update id="updatePlan">
-
         UPDATE travel_plans
-
-        SET
-        title = #{request.title},
-        start_date = #{request.startDate},
-        end_date = #{request.endDate}
-
+        SET title = #{request.title}, start_date = #{request.startDate}, end_date = #{request.endDate}
         WHERE plan_id = #{planId}
-
     </update>
 
-
-    <!-- =========================================================
-         7. 특정 플랜의 하위 경로 삭제
-         ========================================================= -->
     <delete id="deletePlanItemsByPlanId">
-
-        DELETE FROM plan_items
-
-        WHERE plan_id = #{planId}
-
+        DELETE FROM plan_items WHERE plan_id = #{planId}
     </delete>
 
-
-    <!-- =========================================================
-         8. 여행 플랜 마스터 삭제
-         ========================================================= -->
     <delete id="deletePlan">
-
-        DELETE FROM travel_plans
-
-        WHERE plan_id = #{planId}
-
+        DELETE FROM travel_plans WHERE plan_id = #{planId}
     </delete>
 
+    <update id="updatePlanOrder">
+        UPDATE travel_plans
+        SET sort_order = #{sortOrder}
+        WHERE plan_id = #{planId}
+    </update>
 
 </mapper>

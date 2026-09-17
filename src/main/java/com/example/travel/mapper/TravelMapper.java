@@ -33,4 +33,7 @@ public interface TravelMapper {
 
     // 8. 여행 플랜 마스터 삭제
     int deletePlan(@Param("planId") Long planId);
+
+    // 9. 여행 일정 순서(정렬 값) 업데이트
+    void updatePlanOrder(@Param("planId") Long planId, @Param("sortOrder") int sortOrder);
 }
