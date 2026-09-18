@@ -73,17 +73,25 @@ const createUiId = () =>
   `ui-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const toNumber = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
+const getStableItemKey = (item) =>
+  item.id ?? item.itemId ?? item.planItemId ?? null;
+
 const normalizeItems = (items = []) =>
   [...items]
-    .map((item, idx) => ({
-      ...item,
-      _uiId: item._uiId || createUiId(),
-      dayNumber: Number(item.dayNumber || 1),
-      visitOrder: Number(item.visitOrder ?? idx + 1),
-      stayMinutes: Number(item.stayMinutes ?? 60),
-      latitude: toNumber(item.latitude ?? item.lat),
-      longitude: toNumber(item.longitude ?? item.lng),
-    }))
+    .map((item, idx) => {
+      const stableKey = getStableItemKey(item);
+      return {
+        ...item,
+        _uiId:
+          item._uiId ||
+          (stableKey != null ? `item-${stableKey}` : createUiId()),
+        dayNumber: Number(item.dayNumber || 1),
+        visitOrder: Number(item.visitOrder ?? idx + 1),
+        stayMinutes: Number(item.stayMinutes ?? 60),
+        latitude: toNumber(item.latitude ?? item.lat),
+        longitude: toNumber(item.longitude ?? item.lng),
+      };
+    })
     .sort((a, b) => a.dayNumber - b.dayNumber || a.visitOrder - b.visitOrder);
 
 const normalizeVisitOrders = (items = []) => {
@@ -273,9 +281,6 @@ const SortablePlanItem = ({
                 <span style={{ color: "#374151" }}>{departureTime}</span>
               </>
             )}
-            <span style={{ color: "#6b7280" }}>
-              체류 {formatDuration(item.stayMinutes)}
-            </span>
           </div>
           {routeSection && (
             <div
@@ -833,6 +838,23 @@ const PlanDetail = () => {
     return result;
   }, [dayNumbers, itemsByDay, routeSections]);
 
+  const getTotalTravelSeconds = useCallback(
+    (schedule = []) =>
+      schedule.reduce(
+        (sum, s) => sum + Number(s.routeSection?.duration || 0),
+        0,
+      ),
+    [],
+  );
+
+  const dayTravelTotals = useMemo(() => {
+    const totals = {};
+    dayNumbers.forEach((dayNum) => {
+      totals[dayNum] = getTotalTravelSeconds(scheduleByDay[dayNum] || []);
+    });
+    return totals;
+  }, [dayNumbers, scheduleByDay, getTotalTravelSeconds]);
+
   // ============================================================
   // 출력용 데이터/포맷 헬퍼
   // ============================================================
@@ -1003,6 +1025,7 @@ const PlanDetail = () => {
         date: formatPrintDate(dateValue),
         weekday: getPrintWeekday(dateValue),
         items: schedule,
+        totalTravelSeconds: getTotalTravelSeconds(schedule),
       };
     });
   }, [
@@ -1013,6 +1036,7 @@ const PlanDetail = () => {
     getPrintDayTitle,
     formatPrintDate,
     getPrintWeekday,
+    getTotalTravelSeconds,
   ]);
 
   // A4 한 장에 가능한 만큼 DAY 카드를 배치하되, 일정이 긴 DAY는 단독 페이지로 분리합니다.
@@ -1932,6 +1956,18 @@ const PlanDetail = () => {
                     <div className="travel-day-title">
                       DAY {dayNum} ({dayItems.length}개 장소)
                     </div>
+                    <div
+                      style={{
+                        ...S.flexRow,
+                        gap: 4,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "#059669",
+                      }}
+                    >
+                      <Car size={13} />총 이동시간{" "}
+                      {formatDuration(dayTravelTotals[dayNum] || 0, true)}
+                    </div>
                   </div>
                   <DayDropContainer
                     dayNumber={dayNum}
@@ -2001,6 +2037,11 @@ const PlanDetail = () => {
                     <div className="travel-print-day-header">
                       <div className="travel-print-day-title">
                         DAY {day.dayNumber} - {day.title}
+                        <span style={{ color: "#059669", fontWeight: 700 }}>
+                          {" "}
+                          · 총 이동시간{" "}
+                          {formatDuration(day.totalTravelSeconds || 0, true)}
+                        </span>
                       </div>
                       <div className="travel-print-day-date">
                         {day.date} {day.weekday ? `(${day.weekday})` : ""}
@@ -2024,10 +2065,6 @@ const PlanDetail = () => {
                               <div className="travel-print-address">
                                 {scheduleItem.item?.address || "주소 정보 없음"}
                               </div>
-                            </div>
-                            <div className="travel-print-stay">
-                              체류{" "}
-                              {formatDuration(scheduleItem.item?.stayMinutes)}
                             </div>
                           </div>
                         ))
@@ -2171,6 +2208,16 @@ const PlanDetail = () => {
                           <div className="travel-print-day-header">
                             <div className="travel-print-day-title">
                               DAY {day.dayNumber} - {day.title}
+                              <span
+                                style={{ color: "#059669", fontWeight: 700 }}
+                              >
+                                {" "}
+                                · 총 이동시간{" "}
+                                {formatDuration(
+                                  day.totalTravelSeconds || 0,
+                                  true,
+                                )}
+                              </span>
                             </div>
                             <div className="travel-print-day-date">
                               {day.date} {day.weekday ? `(${day.weekday})` : ""}
@@ -2194,12 +2241,6 @@ const PlanDetail = () => {
                                       {scheduleItem.item?.address ||
                                         "주소 정보 없음"}
                                     </div>
-                                  </div>
-                                  <div className="travel-print-stay">
-                                    체류{" "}
-                                    {formatDuration(
-                                      scheduleItem.item?.stayMinutes,
-                                    )}
                                   </div>
                                 </div>
                               ))
