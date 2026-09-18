@@ -4,17 +4,43 @@ import com.example.travel.dto.CreatePlanRequest;
 import com.example.travel.dto.PlanItemDto;
 import com.example.travel.dto.PlanResponseDto;
 import com.example.travel.mapper.TravelMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class TravelService {
 
     private final TravelMapper travelMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * DB에 JSON 문자열로 저장된 일자별 경로 우선순위를
+     * 프론트로 내려줄 Map<Integer, String> 형태로 파싱해서 채워줍니다.
+     * 값이 없거나 파싱에 실패하면 빈 Map으로 채웁니다(=모든 날짜 기본값 RECOMMEND로 처리).
+     */
+    private void fillDayRoutePriority(PlanResponseDto plan) {
+        String json = plan.getDayRoutePriorityJson();
+        if (json == null || json.isBlank()) {
+            plan.setDayRoutePriority(new HashMap<>());
+            return;
+        }
+        try {
+            Map<Integer, String> parsed = objectMapper.readValue(
+                    json, new TypeReference<Map<Integer, String>>() {}
+            );
+            plan.setDayRoutePriority(parsed);
+        } catch (Exception e) {
+            plan.setDayRoutePriority(new HashMap<>());
+        }
+    }
 
 
     // =========================================================
@@ -80,6 +106,7 @@ public class TravelService {
                     );
 
             plan.setItems(items);
+            fillDayRoutePriority(plan);
         }
 
         return plans;
@@ -111,6 +138,7 @@ public class TravelService {
                 );
 
         plan.setItems(items);
+        fillDayRoutePriority(plan);
 
         return plan;
     }

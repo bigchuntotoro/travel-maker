@@ -9,6 +9,7 @@ import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +67,19 @@ public class TravelController {
         // =====================================================
         String url =
                 "https://apis-navi.kakaomobility.com/v1/waypoints/directions";
+
+        // 💡 프론트엔드가 'FREE'를 보냈을 경우 카카오 API 규격에 맞게 변환
+        if ("FREE".equals(requestBody.get("priority"))) {
+            requestBody.put("priority", "RECOMMEND"); // priority는 추천 등으로 두고
+
+            // 유료 도로(toll)를 회피하도록 avoid 설정 추가
+            @SuppressWarnings("unchecked")
+            List<String> avoidList = (List<String>) requestBody.getOrDefault("avoid", new ArrayList<>());
+            if (!avoidList.contains("toll")) {
+                avoidList.add("toll");
+            }
+            requestBody.put("avoid", avoidList);
+        }
 
         RestTemplate restTemplate = new RestTemplate();
 

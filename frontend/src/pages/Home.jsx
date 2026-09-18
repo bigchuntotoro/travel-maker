@@ -17,6 +17,7 @@ import {
   Trash2,
   CloudSun,
   Plus,
+  CreditCard,
 } from "lucide-react";
 import {
   DndContext,
@@ -122,6 +123,12 @@ const formatDistance = (meter) =>
   Number(meter) < 1000
     ? `${Math.round(meter)}m`
     : `${(Number(meter) / 1000).toFixed(1)}km`;
+
+const formatPrice = (price) => {
+  if (!price || Number(price) === 0) return "무료";
+  return `${Number(price).toLocaleString()}원`;
+};
+
 const timeToMins = (time) => {
   if (!time) return 0;
   const [h, m] = String(time).split(":").map(Number);
@@ -298,6 +305,11 @@ const SortablePlanItem = ({
                   · {formatDistance(routeSection.distance)}
                 </span>
               )}
+              {routeSection.tollFare > 0 && (
+                <span style={{ color: "#d97706", marginLeft: 4 }}>
+                  · 통행료 {formatPrice(routeSection.tollFare)}
+                </span>
+              )}
             </div>
           )}
           <div
@@ -425,12 +437,16 @@ const Home = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [routePathsByDay, setRoutePathsByDay] = useState({});
   const [routeSections, setRouteSections] = useState([]);
+  const [routePriority, setRoutePriority] = useState("RECOMMEND"); // RECOMMEND(추천), FREE(무료우선) 등
   const routeRequestIdRef = useRef(0);
   const [selectedDayForMap, setSelectedDayForMap] = useState(1);
   const [selectedPlaceForMap, setSelectedPlaceForMap] = useState(null);
   const [activeDragId, setActiveDragId] = useState(null);
   const [weatherInfo, setWeatherInfo] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+
+  // 일자별 총 요금 계산 요약 상태 추가
+  const [dayTollFares, setDayTollFares] = useState({});
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -494,93 +510,109 @@ const Home = () => {
     return path;
   };
 
-  const loadRoadRoutesByDay = useCallback(async (currentItems) => {
-    const requestId = ++routeRequestIdRef.current;
-    const grouped = groupItemsByDay(currentItems);
-    const days = Object.keys(grouped)
-      .map(Number)
-      .sort((a, b) => a - b);
-    const newSections = [],
-      newPaths = {};
+  const loadRoadRoutesByDay = useCallback(
+    async (currentItems, priorityOption) => {
+      const requestId = ++routeRequestIdRef.current;
+      const grouped = groupItemsByDay(currentItems);
+      const days = Object.keys(grouped)
+        .map(Number)
+        .sort((a, b) => a - b);
+      const newSections = [],
+        newPaths = {};
+      const newFares = {};
 
-    if (days.length === 0) {
-      setRouteSections([]);
-      setRoutePathsByDay({});
-      return;
-    }
-
-    for (const dayNumber of days) {
-      if (requestId !== routeRequestIdRef.current) return;
-      const dayItems = grouped[dayNumber] || [];
-      if (dayItems.length <= 1) {
-        newPaths[dayNumber] = [];
-        continue;
+      if (days.length === 0) {
+        setRouteSections([]);
+        setRoutePathsByDay({});
+        setDayTollFares({});
+        return;
       }
 
-      const first = dayItems[0],
-        last = dayItems[dayItems.length - 1];
-      const origin = {
-        name: first.placeName || "출발지",
-        x: Number(first.longitude),
-        y: Number(first.latitude),
-      };
-      const destination = {
-        name: last.placeName || "도착지",
-        x: Number(last.longitude),
-        y: Number(last.latitude),
-      };
-      const waypoints = dayItems
-        .slice(1, -1)
-        .map((i) => ({
+      for (const dayNumber of days) {
+        if (requestId !== routeRequestIdRef.current) return;
+        const dayItems = grouped[dayNumber] || [];
+        if (dayItems.length <= 1) {
+          newPaths[dayNumber] = [];
+          newFares[dayNumber] = 0;
+          continue;
+        }
+
+        const first = dayItems[0],
+          last = dayItems[dayItems.length - 1];
+        const origin = {
+          name: first.placeName || "출발지",
+          x: Number(first.longitude),
+          y: Number(first.latitude),
+        };
+        const destination = {
+          name: last.placeName || "도착지",
+          x: Number(last.longitude),
+          y: Number(last.latitude),
+        };
+        const waypoints = dayItems.slice(1, -1).map((i) => ({
           name: i.placeName || "경유지",
           x: Number(i.longitude),
           y: Number(i.latitude),
         }));
 
-      try {
-        const res = await axiosInstance.post("/api/plans/route", {
-          origin,
-          destination,
-          waypoints,
-          priority: "RECOMMEND",
-          car_fuel: "GASOLINE",
-        });
-        const route = res?.data?.routes?.[0];
-        if (!route) {
-          newPaths[dayNumber] = [];
-          continue;
-        }
-        const sections = route.sections || [];
-        newPaths[dayNumber] = extractRoutePath(sections);
-        sections.forEach((sec, idx) => {
-          const fromItem = dayItems[idx],
-            toItem = dayItems[idx + 1];
-          if (fromItem && toItem) {
-            newSections.push({
-              dayNumber,
-              fromUiId: fromItem._uiId,
-              toUiId: toItem._uiId,
-              duration: Number(sec.duration || 0),
-              distance: Number(sec.distance || 0),
-            });
+        try {
+          const res = await axiosInstance.post("/api/plans/route", {
+            origin,
+            destination,
+            waypoints,
+            priority: priorityOption, // 유료/무료 옵션 반영
+            car_fuel: "GASOLINE",
+          });
+          const route = res?.data?.routes?.[0];
+          if (!route) {
+            newPaths[dayNumber] = [];
+            newFares[dayNumber] = 0;
+            continue;
           }
-        });
-      } catch (err) {
-        newPaths[dayNumber] = [];
+          const sections = route.sections || [];
+          newPaths[dayNumber] = extractRoutePath(sections);
+
+          let dayTotalToll = 0;
+          sections.forEach((sec, idx) => {
+            const fromItem = dayItems[idx],
+              toItem = dayItems[idx + 1];
+            const tollFare = Number(
+              sec.tollFare || route.summary?.fare?.toll || 0,
+            );
+            dayTotalToll += tollFare;
+
+            if (fromItem && toItem) {
+              newSections.push({
+                dayNumber,
+                fromUiId: fromItem._uiId,
+                toUiId: toItem._uiId,
+                duration: Number(sec.duration || 0),
+                distance: Number(sec.distance || 0),
+                tollFare: Number(sec.tollFare || 0),
+              });
+            }
+          });
+          newFares[dayNumber] = route.summary?.fare?.toll ?? dayTotalToll;
+        } catch (err) {
+          newPaths[dayNumber] = [];
+          newFares[dayNumber] = 0;
+        }
       }
-    }
-    if (requestId !== routeRequestIdRef.current) return;
-    setRouteSections(newSections);
-    setRoutePathsByDay(newPaths);
-  }, []);
+      if (requestId !== routeRequestIdRef.current) return;
+      setRouteSections(newSections);
+      setRoutePathsByDay(newPaths);
+      setDayTollFares(newFares);
+    },
+    [],
+  );
 
   useEffect(() => {
     const timer = setTimeout(
-      () => loadRoadRoutesByDay(normalizedCurrentItems),
+      () => loadRoadRoutesByDay(normalizedCurrentItems, routePriority),
       350,
     );
     return () => clearTimeout(timer);
-  }, [normalizedCurrentItems, loadRoadRoutesByDay]);
+  }, [normalizedCurrentItems, routePriority, loadRoadRoutesByDay]);
 
   const fetchWeatherForSelectedDay = useCallback(async (dayItems) => {
     if (!dayItems.length || !Number.isFinite(Number(dayItems[0].latitude))) {
@@ -788,7 +820,7 @@ const Home = () => {
         .travel-home { width: 100%; max-width: 1500px; margin: 0 auto; padding: 25px 20px 50px; }
         .travel-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 15px; }
         .travel-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .travel-basic-info { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding: 16px; }
+        .travel-basic-info { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding: 16px; flex-wrap: wrap; }
         .travel-main-grid { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
         .travel-map-wrapper { position: sticky; top: 15px; height: 680px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
         .travel-map-toolbar { width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; background: #fff; border-bottom: 1px solid #e5e7eb; }
@@ -889,6 +921,32 @@ const Home = () => {
               }}
             />
           </div>
+
+          {/* 경로 탐색 옵션 (유료/무료 도로 선택) 추가 */}
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}
+          >
+            <Car size={16} color="#6b7280" />
+            <select
+              value={routePriority}
+              onChange={(e) => setRoutePriority(e.target.value)}
+              style={{
+                padding: "9px 10px",
+                border: "1px solid #d1d5db",
+                borderRadius: 8,
+                width: "100%",
+                background: "#fff",
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              <option value="RECOMMEND">🚗 추천 경로 (유료/무료 혼합)</option>
+              <option value="FREE">🛣️ 무료 도로 우선</option>
+              <option value="TIME">⚡ 최단 시간 우선</option>
+              <option value="DISTANCE">📏 최단 거리 우선</option>
+            </select>
+          </div>
+
           <button
             type="button"
             onClick={handleSubmitPlan}
@@ -1007,6 +1065,8 @@ const Home = () => {
               {dayNumbers.map((d) => {
                 const dayItems = itemsByDay[d] || [];
                 const schedule = scheduleByDay[d] || [];
+                const totalToll = dayTollFares[d] || 0;
+
                 return (
                   <div key={d} className="travel-day-section">
                     <div
@@ -1019,6 +1079,9 @@ const Home = () => {
                           selectedDayForMap === d
                             ? "1px solid #bfdbfe"
                             : "1px solid #e5e7eb",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
                       }}
                     >
                       <div
@@ -1031,6 +1094,23 @@ const Home = () => {
                       >
                         DAY {d} ({dayItems.length}개 장소)
                       </div>
+
+                      {/* 일자별 예상 통행료 표시 */}
+                      {dayItems.length > 1 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: totalToll > 0 ? "#d97706" : "#4b5563",
+                          }}
+                        >
+                          <CreditCard size={14} />
+                          <span>예상 통행료: {formatPrice(totalToll)}</span>
+                        </div>
+                      )}
                     </div>
                     <DayDropContainer
                       dayNumber={d}

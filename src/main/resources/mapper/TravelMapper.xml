@@ -6,8 +6,8 @@
 
     <insert id="insertPlan" parameterType="com.example.travel.dto.CreatePlanRequest"
             useGeneratedKeys="true" keyProperty="planId">
-        INSERT INTO travel_plans (user_id, title, start_date, end_date)
-        VALUES (#{userId}, #{title}, #{startDate}, #{endDate})
+        INSERT INTO travel_plans (user_id, title, start_date, end_date, day_route_priority)
+        VALUES (#{userId}, #{title}, #{startDate}, #{endDate}, #{dayRoutePriorityJson})
     </insert>
 
     <insert id="insertPlanItems">
@@ -19,7 +19,7 @@
     </insert>
 
     <select id="selectPlanById" resultType="com.example.travel.dto.PlanResponseDto">
-        SELECT plan_id AS planId, user_id AS userId, title, start_date AS startDate, end_date AS endDate
+        SELECT plan_id AS planId, user_id AS userId, title, start_date AS startDate, end_date AS endDate, day_route_priority AS dayRoutePriorityJson
         FROM travel_plans
         WHERE plan_id = #{planId}
     </select>
@@ -33,7 +33,7 @@
     </select>
 
     <select id="selectPlansByUserId" resultType="com.example.travel.dto.PlanResponseDto">
-        SELECT plan_id AS planId, user_id AS userId, title, start_date AS startDate, end_date AS endDate
+        SELECT plan_id AS planId, user_id AS userId, title, start_date AS startDate, end_date AS endDate, day_route_priority AS dayRoutePriorityJson
         FROM travel_plans
         WHERE user_id = #{userId}
         ORDER BY sort_order ASC, plan_id DESC
@@ -41,7 +41,10 @@
 
     <update id="updatePlan">
         UPDATE travel_plans
-        SET title = #{request.title}, start_date = #{request.startDate}, end_date = #{request.endDate}
+        SET title = #{request.title},
+        start_date = #{request.startDate},
+        end_date = #{request.endDate},
+        day_route_priority = #{request.dayRoutePriorityJson}
         WHERE plan_id = #{planId}
     </update>
 

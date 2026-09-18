@@ -421,7 +421,8 @@ const PlanDetail = () => {
   const [activeDragId, setActiveDragId] = useState(null);
   const [weatherInfo, setWeatherInfo] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
-
+  const [dayRoutePriority, setDayRoutePriority] = useState({}); // 💡 일자별 { [dayNumber]: "RECOMMEND" | "FREE" }
+  const [routeFares, setRouteFares] = useState({}); // DAY별 통행료 저장 (예: { 1: 4500, 2: 0 })
   // ============================================================
   // A4 출력 / 이미지 / PDF 내보내기
   // ============================================================
@@ -443,6 +444,7 @@ const PlanDetail = () => {
     setEditStartDate(data?.startDate || "");
     setEditEndDate(data?.endDate || "");
     setEditItems(items);
+    setDayRoutePriority(data?.dayRoutePriority || {});
     setSelectedDayForMap(
       items.length > 0 ? Number(items[0].dayNumber || 1) : 1,
     );
@@ -465,7 +467,8 @@ const PlanDetail = () => {
   }, []);
 
   const loadRoadRoutesByDay = useCallback(
-    async (items) => {
+    async (items, priorityMapOverride) => {
+      const priorityMap = priorityMapOverride ?? dayRoutePriority;
       const requestId = ++routeRequestIdRef.current;
       const grouped = groupItemsByDay(items);
       try {
@@ -474,12 +477,15 @@ const PlanDetail = () => {
           .sort((a, b) => a - b);
         const newSections = [],
           newPaths = {};
+        const newFares = {}; // 💡 DAY별 통행료를 담을 객체
 
         for (const dayNumber of dayNumbers) {
           if (requestId !== routeRequestIdRef.current) return;
+          const priority = priorityMap?.[dayNumber] || "RECOMMEND"; // 💡 날짜별 우선순위 (미지정 시 추천/유료포함)
           const dayItems = grouped[dayNumber] || [];
           if (dayItems.length <= 1) {
             newPaths[dayNumber] = [];
+            newFares[dayNumber] = 0;
             continue;
           }
           const first = dayItems[0],
@@ -507,21 +513,35 @@ const PlanDetail = () => {
             !isFinite(destination.y)
           ) {
             newPaths[dayNumber] = [];
+            newFares[dayNumber] = 0;
             continue;
           }
 
-          const res = await axiosInstance.post("/api/plans/route", {
+          const requestPayload = {
             origin,
             destination,
             waypoints,
-            priority: "RECOMMEND",
+            priority: priority === "FREE" ? "RECOMMEND" : priority,
             car_fuel: "GASOLINE",
-          });
+          };
+
+          if (priority === "FREE") {
+            requestPayload.avoid = ["toll"];
+          }
+
+          const res = await axiosInstance.post(
+            "/api/plans/route",
+            requestPayload,
+          );
           const route = res?.data?.routes?.[0];
           if (!route) {
             newPaths[dayNumber] = [];
+            newFares[dayNumber] = 0;
             continue;
           }
+          newFares[dayNumber] =
+            priority === "FREE" ? 0 : route.summary?.fare?.toll || 0;
+
           const sections = route.sections || [];
           newPaths[dayNumber] = extractRoutePath(sections);
           sections.forEach((section, index) => {
@@ -543,13 +563,15 @@ const PlanDetail = () => {
         if (requestId !== routeRequestIdRef.current) return;
         setRouteSections(newSections);
         setRoutePathsByDay(newPaths);
+        setRouteFares(newFares); // 💡 통행료 상태 업데이트
       } catch (e) {
         if (requestId !== routeRequestIdRef.current) return;
         setRouteSections([]);
         setRoutePathsByDay({});
+        setRouteFares({});
       }
     },
-    [extractRoutePath],
+    [extractRoutePath, dayRoutePriority],
   );
 
   const fetchPlanDetail = useCallback(async () => {
@@ -560,7 +582,10 @@ const PlanDetail = () => {
       const res = await axiosInstance.get(`/api/plans/${planId}`);
       setPlan(res?.data);
       initEditState(res?.data);
-      await loadRoadRoutesByDay(normalizeItems(res?.data?.items || []));
+      await loadRoadRoutesByDay(
+        normalizeItems(res?.data?.items || []),
+        res?.data?.dayRoutePriority || {},
+      );
     } catch (err) {
       setError("여행 일정을 불러오지 못했습니다.");
     } finally {
@@ -570,7 +595,13 @@ const PlanDetail = () => {
 
   useEffect(() => {
     fetchPlanDetail();
-  }, [fetchPlanDetail]);
+    // planId가 바뀔 때(=다른 일정으로 진입할 때)만 다시 불러오면 됩니다.
+    // fetchPlanDetail은 loadRoadRoutesByDay -> dayRoutePriority에 연쇄적으로 의존하고 있어서,
+    // 의존성 배열에 fetchPlanDetail을 그대로 넣으면 dayRoutePriority(셀렉트박스)가 바뀔 때마다
+    // 이 effect가 다시 실행되어 서버에 저장된(아직 저장 전이라 예전) dayRoutePriority로
+    // 즉시 되돌려버리는 문제가 있었습니다. planId만 의존성으로 두어 이를 방지합니다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planId]);
 
   const currentItems = useMemo(
     () => (isEditing ? editItems : normalizeItems(plan?.items || [])),
@@ -1208,6 +1239,7 @@ const PlanDetail = () => {
         startDate: editStartDate,
         endDate: editEndDate,
         items: cleanItems,
+        dayRoutePriority: dayRoutePriority,
       });
       alert("저장되었습니다.");
       setIsEditing(false);
@@ -1223,6 +1255,7 @@ const PlanDetail = () => {
     editStartDate,
     editEndDate,
     editItems,
+    dayRoutePriority,
     planId,
     fetchPlanDetail,
   ]);
@@ -1784,6 +1817,61 @@ const PlanDetail = () => {
                 <MapPin size={15} />
                 <span>여행 지도</span>
               </div>
+
+              {/* 💡 유료/무료 도로 선택 셀렉트박스 (DAY별로 별도 저장) */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Car size={14} color="#6b7280" />
+                <span
+                  style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}
+                >
+                  DAY {selectedDayForMap}
+                </span>
+                <select
+                  value={dayRoutePriority[selectedDayForMap] || "RECOMMEND"}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const next = {
+                      ...dayRoutePriority,
+                      [selectedDayForMap]: val,
+                    };
+                    setDayRoutePriority(next);
+                    loadRoadRoutesByDay(currentItems, next); // 옵션 변경 즉시 해당 날짜만 경로 재계산
+                  }}
+                  style={{
+                    border: "1px solid #d1d5db",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    fontSize: 12,
+                    background: "#fff",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="RECOMMEND">추천 경로 (유료 포함)</option>
+                  <option value="FREE">무료 우선 도로</option>
+                </select>
+              </div>
+
+              {/* 💡 현재 선택된 날짜의 예상 통행료 표시 영역 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  fontSize: 13,
+                  color: "#4b5563",
+                }}
+              >
+                <div>
+                  통행료:{" "}
+                  <strong style={{ color: "#111827" }}>
+                    {routeFares[selectedDayForMap] !== undefined
+                      ? `${routeFares[selectedDayForMap].toLocaleString()}원`
+                      : "계산 중..."}
+                  </strong>
+                </div>
+              </div>
+
               <div className="travel-map-day-selector">
                 {dayNumbers.map((dayNum) => (
                   <button
