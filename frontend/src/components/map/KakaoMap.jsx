@@ -1,5 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 
+// ============================================================
+// 카테고리별 빠른 검색 버튼 (카카오 장소 카테고리 코드)
+// ============================================================
+const CATEGORY_CHIPS = [
+  { label: "편의점", code: "CS2" },
+  { label: "카페", code: "CE7" },
+  { label: "음식점", code: "FD6" },
+  { label: "마트", code: "MT1" },
+  { label: "주차장", code: "PK6" },
+  { label: "은행", code: "BK9" },
+  { label: "약국", code: "PM9" },
+  { label: "지하철역", code: "SW8" },
+];
+
 const KakaoMap = ({
   items = [],
   onPlaceSelect,
@@ -10,6 +24,7 @@ const KakaoMap = ({
   const mapWrapperRef = useRef(null);
   const mapInstance = useRef(null);
   const markersRef = useRef([]);
+  const searchMarkersRef = useRef([]);
   const polylineRef = useRef(null);
   const selectedMarkerRef = useRef(null);
 
@@ -17,6 +32,12 @@ const KakaoMap = ({
   const onPlaceSelectRef = useRef(onPlaceSelect);
 
   const [mapReady, setMapReady] = useState(false);
+
+  // 💡 현재 화면 범위 내 장소 검색 관련 상태
+  const [filterKeyword, setFilterKeyword] = useState("");
+  const [filterResults, setFilterResults] = useState([]);
+  const [isFilterSearching, setIsFilterSearching] = useState(false);
+  const [showResultsPanel, setShowResultsPanel] = useState(false);
 
   useEffect(() => {
     onPlaceSelectRef.current = onPlaceSelect;
@@ -416,12 +437,142 @@ const KakaoMap = ({
   }, [routePath, mapReady]);
 
   // ============================================================
+  // 💡 현재 화면(bounds) 안에서만 장소 검색
+  // ============================================================
+
+  const runFilterSearch = (keyword, categoryCode) => {
+    if (!mapReady || !mapInstance.current || !window.kakao?.maps?.services) {
+      alert("지도가 아직 준비되지 않았습니다.");
+      return;
+    }
+
+    const trimmed = (keyword || "").trim();
+
+    if (!trimmed && !categoryCode) {
+      return;
+    }
+
+    // 핵심: 현재 지도 화면의 bounds를 그대로 검색 옵션에 넘기면
+    // 그 범위 안에 있는 결과만 반환된다.
+    const bounds = mapInstance.current.getBounds();
+    const ps = new window.kakao.maps.services.Places();
+
+    setIsFilterSearching(true);
+    setShowResultsPanel(true);
+
+    const callback = (data, status) => {
+      setIsFilterSearching(false);
+
+      if (status === window.kakao.maps.services.Status.OK) {
+        setFilterResults(data);
+      } else {
+        // ZERO_RESULT, ERROR 모두 빈 결과로 처리
+        setFilterResults([]);
+      }
+    };
+
+    if (categoryCode) {
+      ps.categorySearch(categoryCode, callback, { bounds });
+    } else {
+      ps.keywordSearch(trimmed, callback, { bounds });
+    }
+  };
+
+  const handleFilterSubmit = (e) => {
+    e.preventDefault();
+    runFilterSearch(filterKeyword);
+  };
+
+  const handleCategoryClick = (label, code) => {
+    setFilterKeyword(label);
+    runFilterSearch(label, code);
+  };
+
+  const handleClearFilterResults = () => {
+    setFilterResults([]);
+    setShowResultsPanel(false);
+    setFilterKeyword("");
+  };
+
+  const handleFilterResultClick = (place) => {
+    const lat = Number(place.y);
+    const lng = Number(place.x);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    mapInstance.current?.panTo(new window.kakao.maps.LatLng(lat, lng));
+
+    notifyPlaceSelect({
+      latitude: lat,
+      longitude: lng,
+      placeName: place.place_name,
+      address: place.road_address_name || place.address_name || "",
+      source: "filter-search",
+    });
+  };
+
+  // 검색 결과를 지도 위에 마커로 표시
+  useEffect(() => {
+    if (!mapReady || !mapInstance.current) return;
+
+    searchMarkersRef.current.forEach((m) => m.setMap(null));
+    searchMarkersRef.current = [];
+
+    if (!filterResults.length) return;
+
+    filterResults.forEach((place, idx) => {
+      const lat = Number(place.y);
+      const lng = Number(place.x);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      const pos = new window.kakao.maps.LatLng(lat, lng);
+
+      const content = document.createElement("div");
+
+      content.style.cssText =
+        "padding:6px 9px;" +
+        "background:#059669;" +
+        "color:#fff;" +
+        "border-radius:8px;" +
+        "font-size:11px;" +
+        "font-weight:700;" +
+        "box-shadow:0 2px 5px rgba(0,0,0,.3);" +
+        "white-space:nowrap;" +
+        "max-width:160px;" +
+        "overflow:hidden;" +
+        "text-overflow:ellipsis;" +
+        "cursor:pointer;";
+
+      content.textContent = `${idx + 1}. ${place.place_name}`;
+      content.addEventListener("click", (e) => {
+        e.stopPropagation();
+        handleFilterResultClick(place);
+      });
+
+      const overlay = new window.kakao.maps.CustomOverlay({
+        position: pos,
+        content,
+        yAnchor: 1.5,
+        zIndex: 60,
+      });
+
+      overlay.setMap(mapInstance.current);
+
+      searchMarkersRef.current.push(overlay);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterResults, mapReady]);
+
+  // ============================================================
   // 컴포넌트 종료
   // ============================================================
 
   useEffect(() => {
     return () => {
       markersRef.current.forEach((m) => m.setMap(null));
+
+      searchMarkersRef.current.forEach((m) => m.setMap(null));
 
       polylineRef.current?.setMap(null);
 
@@ -461,6 +612,171 @@ const KakaoMap = ({
           cursor: "crosshair",
         }}
       />
+
+      {/* ======================================================
+          💡 현재 화면 범위 내 검색 패널
+      ====================================================== */}
+
+      {mapReady && (
+        <div
+          style={{
+            position: "absolute",
+            top: 10,
+            left: 10,
+            right: 10,
+            zIndex: 30,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            maxWidth: 320,
+          }}
+        >
+          <form
+            onSubmit={handleFilterSubmit}
+            style={{ display: "flex", gap: 6 }}
+          >
+            <input
+              type="text"
+              value={filterKeyword}
+              onChange={(e) => setFilterKeyword(e.target.value)}
+              placeholder="현재 화면에서 검색 (예: 편의점)"
+              style={{
+                flex: 1,
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid #d1d5db",
+                fontSize: 13,
+                outline: "none",
+                background: "#fff",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={isFilterSearching}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "none",
+                background: "#059669",
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {isFilterSearching ? "검색중..." : "검색"}
+            </button>
+          </form>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {CATEGORY_CHIPS.map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => handleCategoryClick(c.label, c.code)}
+                style={{
+                  padding: "5px 9px",
+                  borderRadius: 999,
+                  border: "1px solid #059669",
+                  background: "#fff",
+                  color: "#059669",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          {showResultsPanel && (
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: 10,
+                boxShadow: "0 4px 14px rgba(0,0,0,.15)",
+                maxHeight: 220,
+                overflowY: "auto",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "8px 10px",
+                  borderBottom: "1px solid #f0f0f0",
+                  position: "sticky",
+                  top: 0,
+                  background: "#fff",
+                }}
+              >
+                <span
+                  style={{ fontSize: 12, fontWeight: 700, color: "#111827" }}
+                >
+                  현재 화면 검색 결과
+                  {filterResults.length > 0 ? ` (${filterResults.length})` : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearFilterResults}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "#6b7280",
+                    fontSize: 13,
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {isFilterSearching ? (
+                <div style={{ padding: 12, fontSize: 12, color: "#6b7280" }}>
+                  검색 중...
+                </div>
+              ) : filterResults.length === 0 ? (
+                <div style={{ padding: 12, fontSize: 12, color: "#6b7280" }}>
+                  현재 화면 범위 안에 결과가 없습니다. 지도를 이동하거나 축소한
+                  뒤 다시 검색해보세요.
+                </div>
+              ) : (
+                filterResults.map((place, idx) => (
+                  <div
+                    key={`${place.id || place.place_name}-${idx}`}
+                    onClick={() => handleFilterResultClick(place)}
+                    style={{
+                      padding: "8px 10px",
+                      borderBottom: "1px solid #f5f5f5",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "#111827",
+                      }}
+                    >
+                      {idx + 1}. {place.place_name}
+                    </div>
+                    <div
+                      style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}
+                    >
+                      {place.road_address_name || place.address_name || ""}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ======================================================
           지도 로딩
