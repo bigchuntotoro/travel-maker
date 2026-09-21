@@ -17,11 +17,11 @@ import {
   GripVertical,
   Printer,
   MapPin,
-  Pencil,
   Save,
   Trash2,
   X,
   Search,
+  RotateCcw,
 } from "lucide-react";
 import {
   DndContext,
@@ -164,7 +164,6 @@ const calculateDayCount = (start, end) => {
 const SortablePlanItem = ({
   item,
   index,
-  isEditing,
   onRemove,
   onStayChange,
   onSelect,
@@ -306,47 +305,43 @@ const SortablePlanItem = ({
               )}
             </div>
           )}
-          {isEditing && (
-            <div
-              style={{ ...S.flexRow, gap: 6, marginTop: 8 }}
-              onClick={(e) => e.stopPropagation()}
+          <div
+            style={{ ...S.flexRow, gap: 6, marginTop: 8 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Clock3 size={13} color="#6b7280" />
+            <select
+              value={Number(item.stayMinutes || 60)}
+              onChange={(e) => onStayChange(item._uiId, Number(e.target.value))}
+              style={{
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                padding: "5px 7px",
+                fontSize: 11,
+                background: "#fff",
+              }}
             >
-              <Clock3 size={13} color="#6b7280" />
-              <select
-                value={Number(item.stayMinutes || 60)}
-                onChange={(e) =>
-                  onStayChange(item._uiId, Number(e.target.value))
-                }
-                style={{
-                  border: "1px solid #d1d5db",
-                  borderRadius: 6,
-                  padding: "5px 7px",
-                  fontSize: 11,
-                  background: "#fff",
-                }}
-              >
-                {STAY_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    체류 {formatDuration(m)}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => onRemove(item._uiId)}
-                style={{
-                  marginLeft: "auto",
-                  border: "none",
-                  background: "transparent",
-                  color: "#ef4444",
-                  cursor: "pointer",
-                  padding: 4,
-                }}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          )}
+              {STAY_OPTIONS.map((m) => (
+                <option key={m} value={m}>
+                  체류 {formatDuration(m)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => onRemove(item._uiId)}
+              style={{
+                marginLeft: "auto",
+                border: "none",
+                background: "transparent",
+                color: "#ef4444",
+                cursor: "pointer",
+                padding: 4,
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -357,7 +352,6 @@ const DayDropContainer = ({
   dayNumber,
   children,
   itemIds,
-  isEditing,
   onDaySelect,
   isSelected,
 }) => {
@@ -385,7 +379,7 @@ const DayDropContainer = ({
       <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
         {children}
       </SortableContext>
-      {isEditing && itemIds.length === 0 && (
+      {itemIds.length === 0 && (
         <div
           style={{
             minHeight: 70,
@@ -413,7 +407,6 @@ const PlanDetail = () => {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
@@ -608,20 +601,14 @@ const PlanDetail = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId]);
 
-  const currentItems = useMemo(
-    () => (isEditing ? editItems : normalizeItems(plan?.items || [])),
-    [isEditing, editItems, plan?.items],
-  );
+  const currentItems = editItems;
   const itemsByDay = useMemo(
     () => groupItemsByDay(currentItems),
     [currentItems],
   );
 
   const dayNumbers = useMemo(() => {
-    const count = calculateDayCount(
-      isEditing ? editStartDate : plan?.startDate,
-      isEditing ? editEndDate : plan?.endDate,
-    );
+    const count = calculateDayCount(editStartDate, editEndDate);
     const itemDays = Object.keys(itemsByDay)
       .map(Number)
       .filter(Number.isFinite);
@@ -631,14 +618,7 @@ const PlanDetail = () => {
       },
       (_, i) => i + 1,
     );
-  }, [
-    itemsByDay,
-    isEditing,
-    editStartDate,
-    editEndDate,
-    plan?.startDate,
-    plan?.endDate,
-  ]);
+  }, [itemsByDay, editStartDate, editEndDate]);
 
   useEffect(() => {
     if (!dayNumbers.includes(selectedDayForMap)) {
@@ -687,10 +667,6 @@ const PlanDetail = () => {
   // 💡 검색된 장소를 특정 Day 일정에 추가하는 공통 함수
   const addSearchedItemToSchedule = useCallback(
     (place) => {
-      if (!isEditing) {
-        alert("편집 모드에서만 일정을 추가할 수 있습니다.");
-        return;
-      }
       const lat = Number(place.y ?? place.latitude ?? place.lat);
       const lng = Number(place.x ?? place.longitude ?? place.lng);
       if (!isFinite(lat) || !isFinite(lng)) return;
@@ -735,7 +711,7 @@ const PlanDetail = () => {
       setMapSearchKeyword("");
       alert(`DAY ${targetDay} 일정에 '${placeName}'이(가) 추가되었습니다.`);
     },
-    [isEditing, selectedDayForMap, editItems],
+    [selectedDayForMap, editItems],
   );
 
   // 💡 지도 검색 실행 핸들러
@@ -787,7 +763,7 @@ const PlanDetail = () => {
         uiId: place.uiId || null,
       });
 
-      if (isEditing && place.source === "map-click") {
+      if (place.source === "map-click") {
         if (
           window.confirm(
             `'${placeName || "이 장소"}'를 DAY ${selectedDayForMap} 일정에 추가하시겠습니까?`,
@@ -797,7 +773,7 @@ const PlanDetail = () => {
         }
       }
     },
-    [isEditing, selectedDayForMap, addSearchedItemToSchedule],
+    [selectedDayForMap, addSearchedItemToSchedule],
   );
 
   const handleItemSelect = useCallback((item) => {
@@ -863,10 +839,10 @@ const PlanDetail = () => {
   }, []);
 
   useEffect(() => {
-    if (!isEditing || editItems.length === 0) return;
+    if (editItems.length === 0) return;
     const timer = setTimeout(() => loadRoadRoutesByDay(editItems), 400);
     return () => clearTimeout(timer);
-  }, [editItems, isEditing, loadRoadRoutesByDay]);
+  }, [editItems, loadRoadRoutesByDay]);
 
   const scheduleByDay = useMemo(() => {
     const result = {};
@@ -943,7 +919,7 @@ const PlanDetail = () => {
 
   const getPlanStartDate = useCallback(() => {
     return (
-      (isEditing ? editStartDate : null) ||
+      editStartDate ||
       plan?.startDate ||
       plan?.start_date ||
       plan?.tripStartDate ||
@@ -952,11 +928,11 @@ const PlanDetail = () => {
       plan?.fromDate ||
       ""
     );
-  }, [isEditing, editStartDate, plan]);
+  }, [editStartDate, plan]);
 
   const getPlanEndDate = useCallback(() => {
     return (
-      (isEditing ? editEndDate : null) ||
+      editEndDate ||
       plan?.endDate ||
       plan?.end_date ||
       plan?.tripEndDate ||
@@ -965,7 +941,7 @@ const PlanDetail = () => {
       plan?.toDate ||
       ""
     );
-  }, [isEditing, editEndDate, plan]);
+  }, [editEndDate, plan]);
 
   const formatPrintDate = useCallback((value, withYear = false) => {
     if (!value) return "";
@@ -1268,6 +1244,15 @@ const PlanDetail = () => {
     };
   }, [previewOpen, printPages.length, handleClosePreview]);
 
+  const handleRevert = useCallback(() => {
+    if (!plan) return;
+    if (!window.confirm("저장하지 않은 변경사항을 모두 되돌리시겠습니까?")) {
+      return;
+    }
+    initEditState(plan);
+    setSelectedPlaceForMap(null);
+  }, [plan, initEditState]);
+
   const handleSave = useCallback(async () => {
     if (isSaving) return;
     if (!editTitle.trim()) {
@@ -1296,7 +1281,6 @@ const PlanDetail = () => {
         dayRoutePriority: dayRoutePriority,
       });
       alert("저장되었습니다.");
-      setIsEditing(false);
       await fetchPlanDetail();
     } catch (e) {
       alert("일정 저장에 실패했습니다.");
@@ -1477,151 +1461,110 @@ const PlanDetail = () => {
             <ArrowLeft size={18} />
           </button>
           <div style={{ minWidth: 0 }}>
-            {isEditing ? (
-              <input
-                className="travel-detail-title-input"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="여행 제목"
-              />
-            ) : (
-              <h1 className="travel-detail-title">{plan.title}</h1>
-            )}
+            <input
+              className="travel-detail-title-input"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="여행 제목"
+            />
             <div className="travel-detail-date">
               <CalendarDays size={14} />
-              {isEditing ? (
-                <>
-                  <input
-                    type="date"
-                    value={editStartDate}
-                    onChange={(e) => {
-                      setEditStartDate(e.target.value);
-                      if (editEndDate && e.target.value > editEndDate)
-                        setEditEndDate(e.target.value);
-                    }}
-                  />
-                  <span>~</span>
-                  <input
-                    type="date"
-                    value={editEndDate}
-                    min={editStartDate}
-                    onChange={(e) => setEditEndDate(e.target.value)}
-                  />
-                </>
-              ) : (
-                <>
-                  <span>{plan.startDate}</span>
-                  <span>~</span>
-                  <span>{plan.endDate}</span>
-                </>
-              )}
+              <input
+                type="date"
+                value={editStartDate}
+                onChange={(e) => {
+                  setEditStartDate(e.target.value);
+                  if (editEndDate && e.target.value > editEndDate)
+                    setEditEndDate(e.target.value);
+                }}
+              />
+              <span>~</span>
+              <input
+                type="date"
+                value={editEndDate}
+                min={editStartDate}
+                onChange={(e) => setEditEndDate(e.target.value)}
+              />
             </div>
           </div>
         </div>
 
         <div className="travel-detail-actions">
-          {!isEditing && (
-            <div className="travel-export-buttons">
-              <button
-                type="button"
-                className="travel-export-button preview-button"
-                onClick={handleOpenPreview}
-                disabled={exporting}
-                style={{
-                  ...S.btnBase,
-                  border: "1px solid #dbeafe",
-                  background: exporting ? "#f1f5f9" : "#eff6ff",
-                  color: "#1d4ed8",
-                  cursor: exporting ? "default" : "pointer",
-                }}
-              >
-                <Eye size={15} />
-                미리보기
-              </button>
-              <button
-                type="button"
-                className="travel-export-button"
-                onClick={handlePrint}
-                disabled={exporting}
-                style={{
-                  ...S.btnBase,
-                  border: "1px solid #d1d5db",
-                  background: "#fff",
-                  color: "#374151",
-                  cursor: exporting ? "default" : "pointer",
-                }}
-              >
-                <Printer size={15} />
-                인쇄
-              </button>
-            </div>
-          )}
-          {isEditing ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  initEditState(plan);
-                  setIsEditing(false);
-                  setSelectedPlaceForMap(null);
-                }}
-                style={{
-                  ...S.btnBase,
-                  border: "1px solid #d1d5db",
-                  background: "#fff",
-                }}
-              >
-                <X size={15} />
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-                style={{
-                  ...S.btnBase,
-                  border: "none",
-                  background: isSaving ? "#93c5fd" : "#2563eb",
-                  color: "#fff",
-                  cursor: isSaving ? "default" : "pointer",
-                }}
-              >
-                <Save size={15} />
-                {isSaving ? "저장 중..." : "저장"}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsEditing(true);
-                  setSelectedPlaceForMap(null);
-                }}
-                style={{
-                  ...S.btnBase,
-                  border: "1px solid #d1d5db",
-                  background: "#fff",
-                }}
-              >
-                <Pencil size={15} />
-                편집
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                style={{
-                  ...S.btnBase,
-                  border: "1px solid #fecaca",
-                  background: "#fffafa",
-                  color: "#dc2626",
-                }}
-              >
-                <Trash2 size={15} />
-                삭제
-              </button>
-            </>
-          )}
+          <div className="travel-export-buttons">
+            <button
+              type="button"
+              className="travel-export-button preview-button"
+              onClick={handleOpenPreview}
+              disabled={exporting}
+              style={{
+                ...S.btnBase,
+                border: "1px solid #dbeafe",
+                background: exporting ? "#f1f5f9" : "#eff6ff",
+                color: "#1d4ed8",
+                cursor: exporting ? "default" : "pointer",
+              }}
+            >
+              <Eye size={15} />
+              미리보기
+            </button>
+            <button
+              type="button"
+              className="travel-export-button"
+              onClick={handlePrint}
+              disabled={exporting}
+              style={{
+                ...S.btnBase,
+                border: "1px solid #d1d5db",
+                background: "#fff",
+                color: "#374151",
+                cursor: exporting ? "default" : "pointer",
+              }}
+            >
+              <Printer size={15} />
+              인쇄
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={handleRevert}
+            style={{
+              ...S.btnBase,
+              border: "1px solid #d1d5db",
+              background: "#fff",
+              color: "#374151",
+            }}
+          >
+            <RotateCcw size={15} />
+            되돌리기
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            style={{
+              ...S.btnBase,
+              border: "none",
+              background: isSaving ? "#93c5fd" : "#2563eb",
+              color: "#fff",
+              cursor: isSaving ? "default" : "pointer",
+            }}
+          >
+            <Save size={15} />
+            {isSaving ? "저장 중..." : "저장"}
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            style={{
+              ...S.btnBase,
+              border: "1px solid #fecaca",
+              background: "#fffafa",
+              color: "#dc2626",
+            }}
+          >
+            <Trash2 size={15} />
+            삭제
+          </button>
         </div>
       </div>
 
@@ -1723,7 +1666,7 @@ const PlanDetail = () => {
             </div>
 
             {/* 💡 검색 결과 목록 및 [일정 추가] 버튼 */}
-            {searchResults.length > 0 && isEditing && (
+            {searchResults.length > 0 && (
               <div
                 style={{
                   background: "#f8fafc",
@@ -1890,7 +1833,6 @@ const PlanDetail = () => {
                   <DayDropContainer
                     dayNumber={dayNum}
                     itemIds={dayItems.map((i) => i._uiId)}
-                    isEditing={isEditing}
                     onDaySelect={handleDaySelect}
                     isSelected={selected}
                   >
@@ -1899,7 +1841,6 @@ const PlanDetail = () => {
                         key={s.item._uiId}
                         item={s.item}
                         index={idx}
-                        isEditing={isEditing}
                         onRemove={handleRemoveItem}
                         onStayChange={handleStayChange}
                         onSelect={handleItemSelect}

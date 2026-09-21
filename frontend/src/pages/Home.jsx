@@ -18,6 +18,7 @@ import {
   CloudSun,
   Plus,
   CreditCard,
+  Search,
 } from "lucide-react";
 import {
   DndContext,
@@ -448,6 +449,11 @@ const Home = () => {
   // 일자별 총 요금 계산 요약 상태 추가
   const [dayTollFares, setDayTollFares] = useState({});
 
+  // 💡 지도 장소 검색 관련 상태
+  const [mapSearchKeyword, setMapSearchKeyword] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -702,6 +708,52 @@ const Home = () => {
     setSelectedPlaceForMap({ lat, lng, placeName: newItem.placeName });
   };
 
+  // 💡 검색 결과 장소를 선택된 DAY 일정에 바로 추가
+  const addSearchedItemToSchedule = (place) => {
+    const lat = Number(place.y ?? place.latitude ?? place.lat);
+    const lng = Number(place.x ?? place.longitude ?? place.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    const placeName =
+      place.place_name || place.placeName || place.name || "선택된 장소";
+    const address =
+      place.road_address_name || place.address_name || place.address || "";
+
+    addPlaceItem({ placeName, address, latitude: lat, longitude: lng });
+    setSearchResults([]);
+    setMapSearchKeyword("");
+  };
+
+  // 💡 지도 장소 검색 실행
+  const handleMapSearch = (e) => {
+    e?.preventDefault();
+    if (!mapSearchKeyword.trim()) return;
+
+    if (window.kakao?.maps?.services) {
+      setIsSearching(true);
+      const ps = new window.kakao.maps.services.Places();
+      ps.keywordSearch(mapSearchKeyword.trim(), (data, status) => {
+        setIsSearching(false);
+        if (status === window.kakao.maps.services.Status.OK) {
+          setSearchResults(data);
+          if (data.length > 0) {
+            const first = data[0];
+            setSelectedPlaceForMap({
+              lat: Number(first.y),
+              lng: Number(first.x),
+              placeName: first.place_name,
+            });
+          }
+        } else {
+          setSearchResults([]);
+          alert("검색 결과가 없습니다.");
+        }
+      });
+    } else {
+      alert("카카오 지도 서비스가 로드되지 않았습니다.");
+    }
+  };
+
   const handleRemoveItem = (uiId) => {
     setItems((prev) =>
       normalizeVisitOrders(prev.filter((i) => i._uiId !== uiId)),
@@ -823,7 +875,10 @@ const Home = () => {
         .travel-basic-info { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; padding: 16px; flex-wrap: wrap; }
         .travel-main-grid { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
         .travel-map-wrapper { position: sticky; top: 15px; height: 680px; border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
-        .travel-map-toolbar { width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+        .travel-map-toolbar { width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; background: #fff; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; }
+        .travel-map-search-box { display: flex; align-items: center; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 2px 8px; gap: 6px; flex: 1; min-width: 160px; }
+        .travel-map-search-input { border: none; background: transparent; outline: none; font-size: 13px; color: #111827; padding: 6px 0; width: 100%; }
+        .travel-map-search-btn { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
         .travel-map-day-selector { display: flex; align-items: center; gap: 5px; max-width: calc(100% - 90px); overflow-x: auto; scrollbar-width: none; }
         .travel-map-content { position: relative; flex: 1; min-height: 0; width: 100%; overflow: hidden; }
         .travel-weather { margin-bottom: 16px; padding: 12px 16px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1px solid #bfdbfe; border-radius: 12px; display: flex; justify-content: space-between; }
@@ -975,19 +1030,26 @@ const Home = () => {
           <div className="travel-main-grid">
             <div className="travel-map-wrapper">
               <div className="travel-map-toolbar">
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: "#374151",
-                  }}
+                <form
+                  onSubmit={handleMapSearch}
+                  className="travel-map-search-box"
                 >
-                  <MapPin size={15} />
-                  <span>여행 지도</span>
-                </div>
+                  <Search size={14} color="#6b7280" />
+                  <input
+                    type="text"
+                    className="travel-map-search-input"
+                    placeholder="장소 검색..."
+                    value={mapSearchKeyword}
+                    onChange={(e) => setMapSearchKeyword(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="travel-map-search-btn"
+                    disabled={isSearching}
+                  >
+                    {isSearching ? "검색중" : "검색"}
+                  </button>
+                </form>
                 <div className="travel-map-day-selector">
                   {dayNumbers.map((d) => (
                     <button
@@ -1012,6 +1074,102 @@ const Home = () => {
                   ))}
                 </div>
               </div>
+
+              {/* 💡 검색 결과 목록 (클릭하면 바로 선택된 DAY 일정에 추가) */}
+              {searchResults.length > 0 && (
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    borderBottom: "1px solid #e5e7eb",
+                    padding: "8px 12px",
+                    maxHeight: "150px",
+                    overflowY: "auto",
+                    fontSize: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    <span style={{ fontWeight: "bold", color: "#4b5563" }}>
+                      검색 결과 (DAY {selectedDayForMap} 일정에 추가):
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSearchResults([])}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#9ca3af",
+                        fontSize: "11px",
+                      }}
+                    >
+                      닫기
+                    </button>
+                  </div>
+                  {searchResults.map((resItem, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "6px 8px",
+                        cursor: "pointer",
+                        borderRadius: "6px",
+                        background: "#fff",
+                        marginBottom: "4px",
+                        border: "1px solid #e2e8f0",
+                      }}
+                      onClick={() => addSearchedItemToSchedule(resItem)}
+                    >
+                      <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                        <div
+                          style={{
+                            fontWeight: "bold",
+                            color: "#111827",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {resItem.place_name}
+                        </div>
+                        <div
+                          style={{
+                            color: "#64748b",
+                            fontSize: "11px",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {resItem.road_address_name || resItem.address_name}
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          background: "#2563eb",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "5px 10px",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          flexShrink: 0,
+                        }}
+                      >
+                        선택하여 추가
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="travel-map-content">
                 <KakaoMap
                   items={selectedDayItems}
