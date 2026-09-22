@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   CalendarDays,
   Car,
-  Clock3,
   CloudSun,
   Download,
   Eye,
@@ -47,7 +46,6 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 
 const DEFAULT_START_TIME = "09:00";
-const STAY_OPTIONS = [30, 60, 90, 120, 150, 180, 240];
 
 const S = {
   flexRow: { display: "flex", alignItems: "center" },
@@ -306,27 +304,9 @@ const SortablePlanItem = ({
             </div>
           )}
           <div
-            style={{ ...S.flexRow, gap: 6, marginTop: 8 }}
+            style={{ ...S.flexRow, marginTop: 8 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <Clock3 size={13} color="#6b7280" />
-            <select
-              value={Number(item.stayMinutes || 60)}
-              onChange={(e) => onStayChange(item._uiId, Number(e.target.value))}
-              style={{
-                border: "1px solid #d1d5db",
-                borderRadius: 6,
-                padding: "5px 7px",
-                fontSize: 11,
-                background: "#fff",
-              }}
-            >
-              {STAY_OPTIONS.map((m) => (
-                <option key={m} value={m}>
-                  체류 {formatDuration(m)}
-                </option>
-              ))}
-            </select>
             <button
               type="button"
               onClick={() => onRemove(item._uiId)}
@@ -755,6 +735,8 @@ const PlanDetail = () => {
       if (!isFinite(lat) || !isFinite(lng)) return;
 
       const placeName = place.placeName || place.name || place.place_name || "";
+      const address =
+        place.address || place.road_address_name || place.address_name || "";
 
       setSelectedPlaceForMap({
         lat,
@@ -763,13 +745,15 @@ const PlanDetail = () => {
         uiId: place.uiId || null,
       });
 
-      if (place.source === "map-click") {
+      // 💡 지도 클릭 또는 지도 위 "현재 화면 검색/카테고리" 결과 클릭 시
+      // 확인 후 지명 + 주소를 함께 일정에 추가
+      if (place.source === "map-click" || place.source === "filter-search") {
         if (
           window.confirm(
             `'${placeName || "이 장소"}'를 DAY ${selectedDayForMap} 일정에 추가하시겠습니까?`,
           )
         ) {
-          addSearchedItemToSchedule(place);
+          addSearchedItemToSchedule({ ...place, address });
         }
       }
     },

@@ -12,6 +12,7 @@ const CATEGORY_CHIPS = [
   { label: "은행", code: "BK9" },
   { label: "약국", code: "PM9" },
   { label: "지하철역", code: "SW8" },
+  { label: "주유소", code: "OL7" },
 ];
 
 const KakaoMap = ({
