@@ -1,6 +1,10 @@
 server:
   port: 8084
 
+  # Tailscale Funnel / Reverse Proxy의
+  # X-Forwarded-* 헤더를 Spring Boot가 인식하도록 설정
+  forward-headers-strategy: framework
+
 spring:
   datasource:
     driver-class-name: org.mariadb.jdbc.Driver
@@ -18,8 +22,9 @@ mybatis:
 logging:
   level:
     root: info
-    com.example.travel.mapper: DEBUG # SQL 쿼리 로그 확인용
-    org.springframework.security: DEBUG
+    com.example.travel.mapper: DEBUG
+    org.springframework.security: TRACE
+    org.springframework.web.cors: DEBUG
 
 kakao:
   rest-api-key: f5797aa27145b4c698e9a298090a5cbf
