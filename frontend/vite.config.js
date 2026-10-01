@@ -4,6 +4,7 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  base: "/app1/",
   build: {
     outDir: path.resolve(__dirname, "../src/main/resources/static"),
     emptyOutDir: true,
