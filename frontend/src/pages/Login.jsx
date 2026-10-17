@@ -5,8 +5,8 @@ import axiosInstance from "../api/axiosInstance";
 
 const Login = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("bigchun@hanmail.net");
+  const [password, setPassword] = useState("1q2w3e4r");
   const [errorMessage, setErrorMessage] = useState("");
 
   const handleLogin = async (e) => {
